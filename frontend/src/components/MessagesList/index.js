@@ -361,9 +361,20 @@ const MessagesList = ({ ticketId, isGroup }) => {
   useEffect(() => {
     const socket = openSocket();
 
-    socket.on("connect", () => socket.emit("joinChatBox", ticketId));
+    socket.emit("joinChatBox", ticketId);
 
-    socket.on("appMessage", (data) => {
+    const handleConnect = () => {
+      socket.emit("joinChatBox", ticketId);
+    };
+
+    const handleAppMessage = data => {
+      if (!data || !data.message) return;
+
+      const incomingTicketId = Number(data.message.ticketId);
+      const openedTicketId = Number(ticketId);
+
+      if (incomingTicketId !== openedTicketId) return;
+
       if (data.action === "create") {
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
         scrollToBottom();
@@ -372,10 +383,14 @@ const MessagesList = ({ ticketId, isGroup }) => {
       if (data.action === "update") {
         dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
       }
-    });
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("appMessage", handleAppMessage);
 
     return () => {
-      socket.disconnect();
+      socket.off("connect", handleConnect);
+      socket.off("appMessage", handleAppMessage);
     };
   }, [ticketId]);
 
@@ -429,8 +444,6 @@ const MessagesList = ({ ticketId, isGroup }) => {
       return <LocationPreview image={imageLocation} link={linkLocation} description={descriptionLocation} />
     }
     else if (message.mediaType === "vcard") {
-      //console.log("vcard")
-      //console.log(message)
       let array = message.body.split("\n");
       let obj = [];
       let contact = "";
@@ -448,23 +461,6 @@ const MessagesList = ({ ticketId, isGroup }) => {
       }
       return <VcardPreview contact={contact} numbers={obj[0]?.number} />
     }
-    /*else if (message.mediaType === "multi_vcard") {
-      console.log("multi_vcard")
-      console.log(message)
-    	
-      if(message.body !== null && message.body !== "") {
-        let newBody = JSON.parse(message.body)
-        return (
-          <>
-            {
-            newBody.map(v => (
-              <VcardPreview contact={v.name} numbers={v.number} />
-            ))
-            }
-          </>
-        )
-      } else return (<></>)
-    }*/
     else if ( /^.*\.(jpe?g|png|gif)?$/i.exec(message.mediaUrl) && message.mediaType === "image") {
       return <ModalImageCors imageUrl={message.mediaUrl} />;
     } else if (message.mediaType === "audio") {

@@ -88,8 +88,8 @@ const Settings = () => {
 	};
 
 	const getSettingValue = key => {
-		const { value } = settings.find(s => s.key === key);
-		return value;
+		const setting = settings.find(s => s.key === key);
+		return setting ? setting.value : "";
 	};
 
 	return (
@@ -127,7 +127,7 @@ const Settings = () => {
 				<Paper className={classes.paper}>
 					<TextField
 						id="api-token-setting"
-						readonly
+						InputProps={{ readOnly: true }}
 						label="Token Api"
 						margin="dense"
 						variant="outlined"

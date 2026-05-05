@@ -19,9 +19,16 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
 
   try {
     if (ticket.whatsappId) {
+      const digits = (ticket.contact.number || "").replace(/\D/g, "");
+      const fallbackChatId = `${digits}@${ticket.isGroup ? "g" : "c"}.us`;
+
+      const resolvedChatId = ticket.isGroup
+        ? ""
+        : await whatsappProvider.checkNumber(ticket.whatsappId, digits);
+
       await whatsappProvider.sendSeen(
         ticket.whatsappId,
-        `${ticket.contact.number}@${ticket.isGroup ? "g" : "c"}.us`
+        resolvedChatId || fallbackChatId
       );
     }
   } catch (err) {

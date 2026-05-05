@@ -2,6 +2,7 @@ import fs from "fs";
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import { whatsappProvider, ProviderMessage } from "../../providers/WhatsApp";
+import { logger } from "../../utils/logger";
 
 import formatBody from "../../helpers/Mustache";
 
@@ -54,7 +55,7 @@ const SendWhatsAppMedia = async ({
 
     return sentMessage;
   } catch (err) {
-    console.log(err);
+    logger.error(err);
     throw new AppError("ERR_SENDING_WAPP_MSG");
   }
 };

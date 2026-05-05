@@ -122,6 +122,8 @@ const messages = {
         title: "Contacts",
         toasts: {
           deleted: "Contact deleted sucessfully!",
+          importedFromFile: "Import completed: {{imported}} new, {{updated}} updated, {{skipped}} skipped.",
+          phoneImportDisabled: "Phone import disabled. Use XLSX/CSV.",
         },
         searchPlaceholder: "Search ...",
         confirmationModal: {
@@ -132,7 +134,9 @@ const messages = {
           importMessage: "Do you want to import all contacts from the phone?",
         },
         buttons: {
-          import: "Import Contacts",
+          importFile: "Import XLSX/CSV",
+          importPhone: "Import from phone",
+          exportSpreadsheet: "Export Spreadsheet",
           add: "Add Contact",
         },
         table: {

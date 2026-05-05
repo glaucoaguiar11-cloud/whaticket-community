@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext } from "react";
+import React, { useState, useEffect, useReducer, useContext, useRef } from "react";
 import openSocket from "../../services/socket-io";
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
@@ -103,6 +103,7 @@ const Contacts = () => {
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     dispatch({ type: "RESET" });
@@ -132,7 +133,9 @@ const Contacts = () => {
   useEffect(() => {
     const socket = openSocket();
 
-    socket.on("contact", (data) => {
+    const handleContact = data => {
+      if (!data) return;
+
       if (data.action === "update" || data.action === "create") {
         dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
       }
@@ -140,10 +143,12 @@ const Contacts = () => {
       if (data.action === "delete") {
         dispatch({ type: "DELETE_CONTACT", payload: +data.contactId });
       }
-    });
+    };
+
+    socket.on("contact", handleContact);
 
     return () => {
-      socket.disconnect();
+      socket.off("contact", handleContact);
     };
   }, []);
 
@@ -194,12 +199,68 @@ const Contacts = () => {
     setPageNumber(1);
   };
 
-  const handleimportContact = async () => {
+  const handleImportContactFromPhone = async () => {
     try {
       await api.post("/contacts/import");
       history.go(0);
     } catch (err) {
+      if (err?.response?.status === 403) {
+        toast.error(err?.response?.data?.error || i18n.t("contacts.toasts.phoneImportDisabled"));
+      } else {
+        toastError(err);
+      }
+    }
+  };
+
+  const handleExportSpreadsheet = async () => {
+    try {
+      const response = await api.get("/contacts/export-file", {
+        params: { source: "spreadsheet" },
+        responseType: "blob",
+      });
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "contatos-planilha.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
       toastError(err);
+    }
+  };
+
+  const handleOpenImportFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportContactFromFile = async event => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const { data } = await api.post("/contacts/import-file", formData);
+      toast.success(
+        i18n.t("contacts.toasts.importedFromFile", {
+          imported: data.imported,
+          updated: data.updated,
+          skipped: data.skipped,
+        })
+      );
+      history.go(0);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      event.target.value = "";
     }
   };
 
@@ -233,10 +294,10 @@ const Contacts = () => {
         }
         open={confirmOpen}
         onClose={setConfirmOpen}
-        onConfirm={(e) =>
+        onConfirm={() =>
           deletingContact
             ? handleDeleteContact(deletingContact.id)
-            : handleimportContact()
+            : handleImportContactFromPhone()
         }
       >
         {deletingContact
@@ -259,12 +320,33 @@ const Contacts = () => {
               ),
             }}
           />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style={{ display: "none" }}
+            onChange={handleImportContactFromFile}
+          />
           <Button
             variant="contained"
             color="primary"
-            onClick={(e) => setConfirmOpen(true)}
+            onClick={handleOpenImportFileDialog}
           >
-            {i18n.t("contacts.buttons.import")}
+            {i18n.t("contacts.buttons.importFile")}
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={() => setConfirmOpen(true)}
+          >
+            {i18n.t("contacts.buttons.importPhone")}
+          </Button>
+          <Button
+            variant="outlined"
+            color="default"
+            onClick={handleExportSpreadsheet}
+          >
+            {i18n.t("contacts.buttons.exportSpreadsheet")}
           </Button>
           <Button
             variant="contained"

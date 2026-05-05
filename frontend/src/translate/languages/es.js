@@ -124,6 +124,8 @@ const messages = {
         title: "Contactos",
         toasts: {
           deleted: "¡Contacto borrado satisfactoriamente!",
+          importedFromFile: "Importación completada: {{imported}} nuevos, {{updated}} actualizados, {{skipped}} omitidos.",
+          phoneImportDisabled: "Importación desde teléfono deshabilitada. Usa XLSX/CSV.",
         },
         searchPlaceholder: "Buscar...",
         confirmationModal: {
@@ -135,7 +137,9 @@ const messages = {
             "¿Quieres importar todos los contactos desde tu teléfono?",
         },
         buttons: {
-          import: "Importar Contactos",
+          importFile: "Importar XLSX/CSV",
+          importPhone: "Importar del teléfono",
+          exportSpreadsheet: "Exportar Planilla",
           add: "Agregar Contacto",
         },
         table: {

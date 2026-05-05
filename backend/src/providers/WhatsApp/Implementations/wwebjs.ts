@@ -71,11 +71,19 @@ const mapMessageAck = (wbotAck: any): MessageAck => {
   return ackMap[wbotAck] || 0;
 };
 
+const getMessageId = (wbotMessage: WbotMessage): string => {
+  const serialized = (wbotMessage as any)?.id?._serialized;
+  if (serialized) return serialized;
+
+  const chatRef = wbotMessage.fromMe ? wbotMessage.to : wbotMessage.from;
+  return `${wbotMessage.fromMe}_${chatRef}_${wbotMessage.id.id}`;
+};
+
 const convertToProviderMessage = (
   wbotMessage: WbotMessage
 ): ProviderMessage => {
   return {
-    id: wbotMessage.id.id,
+    id: getMessageId(wbotMessage),
     body: wbotMessage.body,
     fromMe: wbotMessage.fromMe,
     hasMedia: wbotMessage.hasMedia,
@@ -101,7 +109,13 @@ const getSerializedMessageId = (
 const convertToContactPayload = async (
   msgContact: WbotContact
 ): Promise<ContactPayload> => {
-  const profilePicUrl = await msgContact.getProfilePicUrl();
+  let profilePicUrl = "";
+
+  try {
+    profilePicUrl = (await msgContact.getProfilePicUrl()) || "";
+  } catch (err) {
+    profilePicUrl = "";
+  }
 
   return {
     name: msgContact.name || msgContact.pushname || msgContact.id.user,
@@ -117,7 +131,7 @@ const verifyQuotedMessage = async (
   if (!msg.hasQuotedMsg) return undefined;
 
   const wbotQuotedMsg = await msg.getQuotedMessage();
-  return wbotQuotedMsg.id.id;
+  return getMessageId(wbotQuotedMsg);
 };
 
 const prepareLocation = (msg: WbotMessage): WbotMessage => {
@@ -145,7 +159,7 @@ const convertToMessagePayload = async (
   const quotedMsgId = await verifyQuotedMessage(processedMsg);
 
   return {
-    id: processedMsg.id.id,
+    id: getMessageId(processedMsg),
     body: processedMsg.body,
     fromMe: processedMsg.fromMe,
     hasMedia: processedMsg.hasMedia,
@@ -192,10 +206,8 @@ const shouldHandleMessage = (msg: WbotMessage): boolean => {
     return false;
   }
 
-  // Check for Unicode direction mark
   if (/\u200e/.test(msg.body[0])) return false;
 
-  // Additional validation for messages from me
   if (msg.fromMe) {
     if (
       !msg.hasMedia &&
@@ -264,10 +276,15 @@ const getMessageData = async (
 
 const syncUnreadMessages = async (wbot: Session) => {
   try {
-    const chats = await wbot.getChats();
+    const shouldSyncUnread =
+      String(process.env.WWEBJS_SYNC_UNREAD_ENABLED).toLowerCase() === "true";
 
-    /* eslint-disable no-restricted-syntax */
-    /* eslint-disable no-await-in-loop */
+    if (!shouldSyncUnread) {
+      logger.info("Skipping unread sync (WWEBJS_SYNC_UNREAD_ENABLED=false)");
+      return;
+    }
+
+    const chats = await wbot.getChats();
     for (const chat of chats) {
       if (chat.unreadCount > 0) {
         const unreadMessages = await chat.fetchMessages({
@@ -320,15 +337,27 @@ const sendMessage = async (
 ): Promise<ProviderMessage> => {
   const wbot = getWbot(sessionId);
 
+  let targetChatId = to;
+
+  if (!to.endsWith("@g.us")) {
+    const raw = to.includes("@") ? to.split("@")[0] : to;
+    const resolved = await wbot.getNumberId(`${raw}@c.us`);
+    if (resolved?._serialized) {
+      targetChatId = resolved._serialized;
+    } else if (!to.includes("@")) {
+      targetChatId = `${raw}@c.us`;
+    }
+  }
+
   const quotedMsgSerializedId = options?.quotedMessageId
     ? getSerializedMessageId(
-        to,
+        targetChatId,
         Boolean(options?.quotedMessageFromMe),
         options?.quotedMessageId
       )
     : "";
 
-  const sentMessage = await wbot.sendMessage(to, body, {
+  const sentMessage = await wbot.sendMessage(targetChatId, body, {
     quotedMessageId: quotedMsgSerializedId,
     linkPreview: options?.linkPreview
   });
@@ -358,9 +387,11 @@ const sendMedia = async (
     quotedMessageId: options?.quotedMessageId
   };
 
+  const mimeType = messageMedia.mimetype || media.mimetype || "";
+
   if (
-    messageMedia.mimetype.startsWith("image/") &&
-    !/^.*\.(jpe?g|png|gif)?$/i.exec(media.filename)
+    mimeType.startsWith("image/") &&
+    !/^.*\.(jpe?g|png|gif)?$/i.exec(media.filename || "")
   ) {
     mediaOptions.sendMediaAsDocument = options?.sendMediaAsDocument || true;
   }
@@ -376,7 +407,7 @@ const checkNumber = async (
   const wbot = getWbot(sessionId);
   const validNumber = await wbot.getNumberId(`${number}@c.us`);
 
-  return validNumber?.user || "";
+  return validNumber?._serialized || "";
 };
 
 const getProfilePicUrl = async (
@@ -433,9 +464,17 @@ const deleteMessage = async (
 ): Promise<void> => {
   const wbot = getWbot(sessionId);
 
-  const serializedMsgId = getSerializedMessageId(chatId, fromMe, messageId);
+  const serializedMsgId =
+    messageId.includes("_") && messageId.includes("@")
+      ? messageId
+      : getSerializedMessageId(chatId, fromMe, messageId);
 
   const message = await wbot.getMessageById(serializedMsgId);
+
+  if (!message) {
+    logger.warn(`Message not found for delete: ${serializedMsgId}`);
+    return;
+  }
 
   await message.delete(true);
 };
@@ -446,17 +485,15 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
 
     const io = getIO();
     const sessionName = whatsapp.name;
-    const sessionCfg = whatsapp?.session ? JSON.parse(whatsapp.session) : {};
-
     const args: string = process.env.CHROME_ARGS || "";
+    const protocolTimeout = Number(process.env.WWEBJS_PROTOCOL_TIMEOUT_MS || 180000);
 
     const wbot: Session = new Client({
-      session: sessionCfg,
       authStrategy: new LocalAuth({ clientId: `bd_${whatsapp.id}` }),
       puppeteer: {
-        // headless: false, // TODO make sure chromium closes on session disconnection / delete
         executablePath: process.env.CHROME_BIN || undefined,
         browserWSEndpoint: process.env.CHROME_WS || undefined,
+        protocolTimeout,
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
@@ -465,7 +502,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
           "--no-first-run",
           "--no-zygote",
           "--disable-gpu",
-          ...args.split(" ")
+          ...args.split(" ").filter(Boolean)
         ]
       }
     });
@@ -612,7 +649,7 @@ const init = async (whatsapp: Whatsapp): Promise<void> => {
     });
 
     wbot.on("message_ack", async (msg, ack) => {
-      handleMessageAck(msg.id.id, mapMessageAck(ack));
+      handleMessageAck(getMessageId(msg), mapMessageAck(ack));
     });
 
     await wbot.initialize();
