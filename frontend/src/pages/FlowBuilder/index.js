@@ -29,7 +29,8 @@ const useStyles = makeStyles(theme => ({
   hero: {
     padding: theme.spacing(2),
     borderRadius: 12,
-    border: `1px solid ${theme.palette.divider}`
+    border: "1px solid #b7dfb9",
+    background: "linear-gradient(135deg, #f1fbf2 0%, #e4f6e6 100%)"
   },
   titleRow: {
     display: "flex",
@@ -42,7 +43,8 @@ const useStyles = makeStyles(theme => ({
   formCard: {
     padding: theme.spacing(2),
     borderRadius: 12,
-    border: `1px solid ${theme.palette.divider}`
+    border: "1px solid #c6e7c9",
+    backgroundColor: "#f8fdf8"
   },
   fieldHelp: {
     fontSize: 12,
@@ -52,7 +54,8 @@ const useStyles = makeStyles(theme => ({
   tableCard: {
     padding: theme.spacing(1),
     borderRadius: 12,
-    border: `1px solid ${theme.palette.divider}`
+    border: "1px solid #c6e7c9",
+    backgroundColor: "#fcfffc"
   },
   empty: {
     padding: theme.spacing(4),
@@ -194,7 +197,7 @@ const FlowBuilder = () => {
           <Typography variant="h6">FlowBuilder • Automação de Mensagens</Typography>
           <div className={classes.actionButtons}>
             <Chip label={`${safeFlows.length} fluxo(s)`} size="small" />
-            <Chip label={`${activeCount} ativo(s)`} color="primary" size="small" />
+            <Chip label={`${activeCount} ativo(s)`} size="small" style={{ backgroundColor: "#43a047", color: "#fff" }} />
           </div>
         </div>
         <Typography className={classes.subtitle}>
@@ -305,7 +308,11 @@ const FlowBuilder = () => {
                     <Chip
                       label={flow.isActive ? "Ativo" : "Inativo"}
                       size="small"
-                      color={flow.isActive ? "primary" : "default"}
+                      style={
+                        flow.isActive
+                          ? { backgroundColor: "#43a047", color: "#fff" }
+                          : { backgroundColor: "#e0e0e0", color: "#424242" }
+                      }
                     />
                   </TableCell>
                   <TableCell align="right">
