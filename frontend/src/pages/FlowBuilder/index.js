@@ -1,336 +1,204 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Button,
-  CircularProgress,
+  Chip,
   Grid,
   MenuItem,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
-  Chip,
-  Divider,
   makeStyles
 } from "@material-ui/core";
+import { Add, Save } from "@material-ui/icons";
 import { toast } from "react-toastify";
 
-import api from "../../services/api";
-import toastError from "../../errors/toastError";
-
 const useStyles = makeStyles(theme => ({
-  root: {
-    display: "grid",
-    gap: theme.spacing(2)
-  },
+  root: { display: "grid", gap: theme.spacing(2) },
   hero: {
     padding: theme.spacing(2),
     borderRadius: 12,
     border: "1px solid #b7dfb9",
     background: "linear-gradient(135deg, #f1fbf2 0%, #e4f6e6 100%)"
   },
-  titleRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: theme.spacing(1),
-    flexWrap: "wrap"
-  },
-  subtitle: { opacity: 0.78, marginTop: theme.spacing(0.5) },
-  formCard: {
+  panel: {
     padding: theme.spacing(2),
     borderRadius: 12,
     border: "1px solid #c6e7c9",
-    backgroundColor: "#f8fdf8"
+    background: "#fcfffc"
   },
-  fieldHelp: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: -2
-  },
-  tableCard: {
-    padding: theme.spacing(1),
+  canvasWrap: {
+    position: "relative",
+    minHeight: 520,
     borderRadius: 12,
     border: "1px solid #c6e7c9",
-    backgroundColor: "#fcfffc"
+    background: "#f8fdf8",
+    overflow: "hidden"
   },
-  empty: {
-    padding: theme.spacing(4),
-    textAlign: "center",
-    opacity: 0.7
+  canvas: { position: "relative", width: "100%", height: 520 },
+  node: {
+    position: "absolute",
+    minWidth: 180,
+    background: "#fff",
+    border: "1px solid #b7dfb9",
+    borderRadius: 10,
+    boxShadow: "0 4px 12px rgba(0,0,0,.06)",
+    padding: 10,
+    cursor: "move"
   },
-  actionButtons: {
-    display: "flex",
-    gap: theme.spacing(1),
-    flexWrap: "wrap"
-  }
+  nodeTitle: { fontWeight: 700, fontSize: 13 },
+  nodeBody: { fontSize: 12, opacity: 0.8, marginTop: 4 },
+  svg: { position: "absolute", inset: 0, pointerEvents: "none" }
 }));
 
-const emptyForm = {
-  name: "",
-  containsText: "",
-  actionType: "send_message",
-  actionValue: "",
-  isActive: true
-};
+const nodeTypes = [
+  { value: "message", label: "Mensagem" },
+  { value: "menu", label: "Menu" },
+  { value: "condition", label: "Condição" },
+  { value: "webhook", label: "Webhook" },
+  { value: "kanban", label: "Mover Kanban" }
+];
 
-const stageHint = "novo | em_atendimento | aguardando_morador | resolvido";
+const initialNodes = [
+  { id: "start", type: "start", label: "Início do fluxo", value: "Entrada", x: 80, y: 210 },
+  { id: "n1", type: "message", label: "Mensagem", value: "Olá, em que posso ajudar?", x: 340, y: 120 },
+  { id: "n2", type: "menu", label: "Menu", value: "1-Financeiro | 2-Suporte", x: 340, y: 300 }
+];
 
-const actionTypeLabels = {
-  send_message: "Enviar mensagem",
-  move_stage: "Mover Kanban",
-  webhook_post: "Webhook POST"
-};
+const initialEdges = [
+  { from: "start", to: "n1" },
+  { from: "n1", to: "n2" }
+];
 
 const FlowBuilder = () => {
   const classes = useStyles();
-  const [flows, setFlows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [nodes, setNodes] = useState(initialNodes);
+  const [edges, setEdges] = useState(initialEdges);
+  const [newType, setNewType] = useState("message");
+  const [selectedFrom, setSelectedFrom] = useState("start");
+  const [selectedTo, setSelectedTo] = useState("n1");
 
-  const safeFlows = useMemo(() => (Array.isArray(flows) ? flows : []), [flows]);
-  const activeCount = useMemo(() => safeFlows.filter(flow => flow.isActive).length, [safeFlows]);
+  const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
 
-  const loadFlows = async () => {
-    try {
-      setLoading(true);
-      const { data } = await api.get("/flows");
-      setFlows(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setFlows([]);
-      toastError(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadFlows();
-  }, []);
-
-  const setField = (field, value) => {
-    setForm(prev => ({ ...(prev || emptyForm), [field]: value }));
-  };
-
-  const actionLabel =
-    form.actionType === "send_message"
-      ? "Mensagem de resposta"
-      : form.actionType === "move_stage"
-        ? "Etapa do Kanban"
-        : "URL do webhook (n8n)";
-
-  const validateForm = () => {
-    if (!form.name.trim()) {
-      toast.warning("Informe um nome para o fluxo");
-      return false;
-    }
-
-    if (!form.actionValue.trim()) {
-      toast.warning("Preencha o valor da ação");
-      return false;
-    }
-
-    if (form.actionType === "move_stage") {
-      const validStages = ["novo", "em_atendimento", "aguardando_morador", "resolvido"];
-      if (!validStages.includes(form.actionValue.trim())) {
-        toast.warning("Etapa inválida. Use um dos valores sugeridos.");
-        return false;
+  const addNode = () => {
+    const id = `n${Date.now()}`;
+    const typeLabel = nodeTypes.find(t => t.value === newType)?.label || "Bloco";
+    setNodes(prev => [
+      ...prev,
+      {
+        id,
+        type: newType,
+        label: typeLabel,
+        value: "Configurar...",
+        x: 620,
+        y: 120 + (prev.length % 5) * 80
       }
-    }
-
-    return true;
+    ]);
+    toast.success("Bloco adicionado ao fluxo");
   };
 
-  const handleCreate = async e => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    try {
-      setCreating(true);
-      await api.post("/flows", {
-        name: form.name.trim(),
-        triggerType: "message_received",
-        containsText: form.containsText.trim(),
-        actionType: form.actionType,
-        actionValue: form.actionValue.trim(),
-        isActive: true
-      });
-
-      setForm(emptyForm);
-      toast.success("Fluxo criado com sucesso");
-      loadFlows();
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setCreating(false);
+  const addConnection = () => {
+    if (!selectedFrom || !selectedTo || selectedFrom === selectedTo) {
+      toast.warning("Selecione origem e destino válidos");
+      return;
     }
+    setEdges(prev => [...prev, { from: selectedFrom, to: selectedTo }]);
   };
 
-  const toggleFlow = async flow => {
-    try {
-      await api.put(`/flows/${flow.id}`, { isActive: !flow.isActive });
-      loadFlows();
-    } catch (err) {
-      toastError(err);
-    }
+  const onDrag = (id, e) => {
+    const x = e.clientX - 220;
+    const y = e.clientY - 180;
+    setNodes(prev => prev.map(n => (n.id === id ? { ...n, x, y } : n)));
   };
 
-  const removeFlow = async flow => {
-    try {
-      await api.delete(`/flows/${flow.id}`);
-      toast.success("Fluxo removido");
-      loadFlows();
-    } catch (err) {
-      toastError(err);
-    }
+  const saveFlow = () => {
+    const payload = { version: 1, nodes, edges, updatedAt: new Date().toISOString() };
+    localStorage.setItem("flowbuilder.visual.v1", JSON.stringify(payload));
+    toast.success("Fluxo visual salvo (V1)");
   };
 
   return (
     <div className={classes.root}>
       <Paper className={classes.hero} elevation={0}>
-        <div className={classes.titleRow}>
-          <Typography variant="h6">FlowBuilder • Automação de Mensagens</Typography>
-          <div className={classes.actionButtons}>
-            <Chip label={`${safeFlows.length} fluxo(s)`} size="small" />
-            <Chip label={`${activeCount} ativo(s)`} size="small" style={{ backgroundColor: "#43a047", color: "#fff" }} />
-          </div>
-        </div>
-        <Typography className={classes.subtitle}>
-          Regras por palavra-chave para responder automaticamente, mover ticket no Kanban ou chamar webhook no n8n.
+        <Typography variant="h6">FlowBuilder Visual (V1)</Typography>
+        <Typography style={{ opacity: 0.8 }}>
+          Editor visual com blocos e conexões no estilo arrasta-e-solta. Próximo passo: persistência completa no backend.
         </Typography>
+        <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Chip label={`${nodes.length} blocos`} />
+          <Chip label={`${edges.length} conexões`} style={{ background: "#43a047", color: "#fff" }} />
+        </div>
       </Paper>
 
-      <Paper className={classes.formCard} elevation={0}>
-        <Typography variant="subtitle1"><b>Novo fluxo</b></Typography>
-        <Divider style={{ margin: "10px 0 16px" }} />
-
-        <form onSubmit={handleCreate}>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Nome do fluxo"
-                value={form.name}
-                onChange={e => setField("name", e.target.value)}
-                required
-                variant="outlined"
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="Quando mensagem contém"
-                value={form.containsText}
-                onChange={e => setField("containsText", e.target.value)}
-                placeholder="ex: boleto, 2ª via"
-                helperText="Pode usar múltiplas palavras separadas por vírgula"
-                variant="outlined"
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                select
-                label="Ação"
-                value={form.actionType}
-                onChange={e => setField("actionType", e.target.value)}
-                variant="outlined"
-                size="small"
-              >
-                <MenuItem value="send_message">Enviar mensagem</MenuItem>
-                <MenuItem value="move_stage">Mover Kanban</MenuItem>
-                <MenuItem value="webhook_post">Webhook POST (n8n)</MenuItem>
-              </TextField>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label={actionLabel}
-                value={form.actionValue}
-                onChange={e => setField("actionValue", e.target.value)}
-                required
-                variant="outlined"
-                size="small"
-              />
-              {form.actionType === "move_stage" && (
-                <Typography className={classes.fieldHelp}>
-                  Sugestão: {stageHint}
-                </Typography>
-              )}
-            </Grid>
-
-            <Grid item xs={12}>
-              <Button type="submit" variant="contained" color="primary" disabled={creating}>
-                {creating ? "Criando..." : "Criar fluxo"}
-              </Button>
-            </Grid>
+      <Paper className={classes.panel} elevation={0}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={3}>
+            <TextField select fullWidth label="Novo bloco" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">
+              {nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+            </TextField>
           </Grid>
-        </form>
+          <Grid item>
+            <Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar bloco</Button>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <TextField select fullWidth label="Conectar de" value={selectedFrom} onChange={e => setSelectedFrom(e.target.value)} variant="outlined" size="small">
+              {nodes.map(n => <MenuItem key={n.id} value={n.id}>{n.label} ({n.id})</MenuItem>)}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <TextField select fullWidth label="Para" value={selectedTo} onChange={e => setSelectedTo(e.target.value)} variant="outlined" size="small">
+              {nodes.map(n => <MenuItem key={n.id} value={n.id}>{n.label} ({n.id})</MenuItem>)}
+            </TextField>
+          </Grid>
+          <Grid item>
+            <Button variant="outlined" onClick={addConnection}>Conectar</Button>
+          </Grid>
+          <Grid item>
+            <Button variant="contained" style={{ background: "#2e7d32", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar fluxo</Button>
+          </Grid>
+        </Grid>
       </Paper>
 
-      <Paper className={classes.tableCard} elevation={0}>
-        {loading ? (
-          <div className={classes.empty}>
-            <CircularProgress size={24} />
-          </div>
-        ) : safeFlows.length === 0 ? (
-          <div className={classes.empty}>Nenhum fluxo criado ainda.</div>
-        ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Nome</TableCell>
-                <TableCell>Gatilho</TableCell>
-                <TableCell>Ação</TableCell>
-                <TableCell>Valor</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {safeFlows.map(flow => (
-                <TableRow key={flow.id} hover>
-                  <TableCell>{flow.name}</TableCell>
-                  <TableCell>{flow.containsText || "(qualquer mensagem)"}</TableCell>
-                  <TableCell>{actionTypeLabels[flow.actionType] || flow.actionType}</TableCell>
-                  <TableCell>{flow.actionValue}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={flow.isActive ? "Ativo" : "Inativo"}
-                      size="small"
-                      style={
-                        flow.isActive
-                          ? { backgroundColor: "#43a047", color: "#fff" }
-                          : { backgroundColor: "#e0e0e0", color: "#424242" }
-                      }
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <div className={classes.actionButtons}>
-                      <Button size="small" variant="outlined" onClick={() => toggleFlow(flow)}>
-                        {flow.isActive ? "Desativar" : "Ativar"}
-                      </Button>
-                      <Button size="small" color="secondary" variant="outlined" onClick={() => removeFlow(flow)}>
-                        Excluir
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Paper>
+      <div className={classes.canvasWrap}>
+        <div className={classes.canvas}>
+          <svg className={classes.svg}>
+            {edges.map((edge, idx) => {
+              const from = byId[edge.from];
+              const to = byId[edge.to];
+              if (!from || !to) return null;
+              const x1 = from.x + 180;
+              const y1 = from.y + 34;
+              const x2 = to.x;
+              const y2 = to.y + 34;
+              const mx = (x1 + x2) / 2;
+
+              return (
+                <path
+                  key={`${edge.from}-${edge.to}-${idx}`}
+                  d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                  stroke="#4caf50"
+                  strokeWidth="2"
+                  fill="none"
+                />
+              );
+            })}
+          </svg>
+
+          {nodes.map(node => (
+            <div
+              key={node.id}
+              className={classes.node}
+              style={{ left: node.x, top: node.y }}
+              draggable
+              onDrag={e => onDrag(node.id, e)}
+            >
+              <div className={classes.nodeTitle}>{node.label}</div>
+              <div className={classes.nodeBody}>{node.value}</div>
+              <Chip size="small" label={node.type} style={{ marginTop: 8 }} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
