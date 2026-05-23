@@ -11,6 +11,7 @@ import {
 } from "@material-ui/core";
 import { Add, Save, Visibility } from "@material-ui/icons";
 import { toast } from "react-toastify";
+import api from "../../services/api";
 
 const useStyles = makeStyles(theme => ({
   root: { display: "grid", gap: theme.spacing(2) },
@@ -150,14 +151,14 @@ const FlowBuilder = () => {
     setNodes(prev => prev.map(n => (n.id === id ? { ...n, x, y } : n)));
   };
 
-  const saveFlow = () => {
+  const saveFlow = async () => {
     const validationError = validateAction();
     if (validationError) {
       toast.warning(validationError);
       return;
     }
 
-    const payload = {
+    const visualPayload = {
       version: 2,
       metadata: { flowName, keywords, createdFrom: "flowbuilder-visual" },
       actionDefaults: { newType, replyMessage, webhookUrl, webhookMethod, webhookPayload, kanbanColumn },
@@ -166,8 +167,33 @@ const FlowBuilder = () => {
       updatedAt: new Date().toISOString()
     };
 
-    localStorage.setItem("flowbuilder.visual.v2", JSON.stringify(payload));
-    toast.success("Fluxo visual salvo (V2)");
+    const actionValue =
+      newType === "message"
+        ? replyMessage
+        : newType === "webhook"
+          ? JSON.stringify({ url: webhookUrl, method: webhookMethod, payload: webhookPayload })
+          : newType === "kanban"
+            ? kanbanColumn
+            : "";
+
+    const apiPayload = {
+      name: flowName,
+      triggerType: "message_received",
+      containsText: keywords,
+      actionType: newType,
+      actionValue,
+      isActive: true,
+      visualPayload
+    };
+
+    try {
+      await api.post("/flows", apiPayload);
+      localStorage.setItem("flowbuilder.visual.v2", JSON.stringify(visualPayload));
+      toast.success("Fluxo salvo no backend com sucesso");
+    } catch (error) {
+      localStorage.setItem("flowbuilder.visual.v2", JSON.stringify(visualPayload));
+      toast.warning("Backend indisponível. Salvo localmente para teste.");
+    }
   };
 
   const reviewText = `SE mensagem contém: ${keywords || "(não informado)"}\nENTÃO ação atual: ${nodeTypes.find(t => t.value === newType)?.label || "-"}`;
