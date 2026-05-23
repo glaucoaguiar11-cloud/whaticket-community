@@ -43,6 +43,11 @@ export default defineConfig({
       "@material-ui/lab",
     ],
     exclude: [],
+    esbuildOptions: {
+      loader: {
+        ".js": "jsx",
+      },
+    },
   },
   resolve: {
     alias: {
