@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Chip,
@@ -87,6 +87,20 @@ const FlowBuilder = () => {
   ]);
   const [edges, setEdges] = useState([{ from: "start", to: "n1" }]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [savedFlows, setSavedFlows] = useState([]);
+
+  const loadFlows = async () => {
+    try {
+      const { data } = await api.get("/flows");
+      setSavedFlows(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.warning("Não foi possível carregar os fluxos salvos");
+    }
+  };
+
+  useEffect(() => {
+    loadFlows();
+  }, []);
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
 
@@ -190,6 +204,7 @@ const FlowBuilder = () => {
       await api.post("/flows", apiPayload);
       localStorage.setItem("flowbuilder.visual.v2", JSON.stringify(visualPayload));
       toast.success("Fluxo salvo no backend com sucesso");
+      loadFlows();
     } catch (error) {
       localStorage.setItem("flowbuilder.visual.v2", JSON.stringify(visualPayload));
       toast.warning("Backend indisponível. Salvo localmente para teste.");
@@ -197,6 +212,46 @@ const FlowBuilder = () => {
   };
 
   const reviewText = `SE mensagem contém: ${keywords || "(não informado)"}\nENTÃO ação atual: ${nodeTypes.find(t => t.value === newType)?.label || "-"}`;
+
+  const toggleFlow = async flow => {
+    try {
+      await api.put(`/flows/${flow.id}`, { isActive: !flow.isActive });
+      toast.success(`Fluxo ${!flow.isActive ? "ativado" : "desativado"}`);
+      loadFlows();
+    } catch (error) {
+      toast.error("Não foi possível atualizar o status do fluxo");
+    }
+  };
+
+  const removeFlow = async flow => {
+    if (!window.confirm(`Excluir fluxo \"${flow.name}\"?`)) return;
+    try {
+      await api.delete(`/flows/${flow.id}`);
+      toast.success("Fluxo excluído");
+      loadFlows();
+    } catch (error) {
+      toast.error("Não foi possível excluir o fluxo");
+    }
+  };
+
+  const editFlow = flow => {
+    setFlowName(flow.name || "");
+    setKeywords(flow.containsText || "");
+    setNewType(flow.actionType || "message");
+    if (flow.actionType === "message") setReplyMessage(flow.actionValue || "");
+    if (flow.actionType === "kanban") setKanbanColumn(flow.actionValue || "");
+    if (flow.actionType === "webhook") {
+      try {
+        const parsed = JSON.parse(flow.actionValue || "{}");
+        setWebhookUrl(parsed.url || "");
+        setWebhookMethod(parsed.method || "POST");
+        setWebhookPayload(parsed.payload || "");
+      } catch (_e) {
+        setWebhookUrl("");
+      }
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <div className={classes.root}>
@@ -292,6 +347,39 @@ const FlowBuilder = () => {
             <Typography variant="subtitle2">Pré-visualização da regra</Typography>
             <Typography variant="body2" style={{ whiteSpace: "pre-line" }}>{reviewText}</Typography>
           </div>
+        )}
+      </Paper>
+
+      <Paper className={classes.panel} elevation={0}>
+        <Typography variant="subtitle1" style={{ fontWeight: 700, marginBottom: 10 }}>
+          Fluxos salvos
+        </Typography>
+        {savedFlows.length === 0 ? (
+          <Typography variant="body2" style={{ opacity: 0.7 }}>
+            Nenhum fluxo salvo ainda.
+          </Typography>
+        ) : (
+          <Grid container spacing={2}>
+            {savedFlows.map(flow => (
+              <Grid item xs={12} md={6} key={flow.id}>
+                <Paper variant="outlined" style={{ padding: 12, borderRadius: 10 }}>
+                  <Typography variant="subtitle2">{flow.name}</Typography>
+                  <Typography variant="body2" style={{ opacity: 0.8 }}>
+                    Palavras-chave: {flow.containsText || "-"}
+                  </Typography>
+                  <Typography variant="body2" style={{ opacity: 0.8 }}>
+                    Ação: {flow.actionType || "-"}
+                  </Typography>
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <Chip size="small" label={flow.isActive ? "Ativo" : "Inativo"} style={{ background: flow.isActive ? "#e8f5e9" : "#f3f4f6" }} />
+                    <Button size="small" variant="outlined" onClick={() => editFlow(flow)}>Editar</Button>
+                    <Button size="small" variant="outlined" onClick={() => toggleFlow(flow)}>{flow.isActive ? "Desativar" : "Ativar"}</Button>
+                    <Button size="small" variant="outlined" style={{ color: "#c62828", borderColor: "#ef9a9a" }} onClick={() => removeFlow(flow)}>Excluir</Button>
+                  </div>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
         )}
       </Paper>
 
