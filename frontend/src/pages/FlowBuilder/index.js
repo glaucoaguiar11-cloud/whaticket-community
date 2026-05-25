@@ -140,8 +140,10 @@ export default function FlowBuilder() {
       setLinkPointer({ x: pointerX, y: pointerY });
       let near = null;
       let minDist = Infinity;
+      const sourceNode = byId[linkingFrom];
       nodes.forEach(n => {
         if (n.id === linkingFrom) return;
+        if (sourceNode && n.x < sourceNode.x + 30) return; // prioriza conexão para a direita
         const tx = n.x;
         const ty = n.y + 28;
         const dist = Math.hypot(pointerX - tx, pointerY - ty);
@@ -150,7 +152,7 @@ export default function FlowBuilder() {
           near = n.id;
         }
       });
-      setHoverTarget(minDist <= 90 ? near : null);
+      setHoverTarget(minDist <= 130 ? near : null);
     }
 
     const drag = dragStateRef.current;
@@ -158,7 +160,7 @@ export default function FlowBuilder() {
     const nextX = Math.max(20, pointerX - drag.offsetX);
     const nextY = Math.max(20, pointerY - drag.offsetY);
     setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
-  }, [zoom, linkingFrom, nodes]);
+  }, [zoom, linkingFrom, nodes, byId]);
 
   const onGlobalMouseUp = useCallback(() => {
     dragStateRef.current = null;
