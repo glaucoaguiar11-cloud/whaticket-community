@@ -117,6 +117,21 @@ export default function FlowBuilder() {
 
   useEffect(() => { setEdges(prev => prev.filter(e => byId[e.from] && byId[e.to])); }, [byId]);
 
+  const onGlobalMouseMove = useCallback((e) => {
+    const drag = dragStateRef.current;
+    if (!drag || !canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
+    const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
+    const nextX = Math.max(20, pointerX - drag.offsetX);
+    const nextY = Math.max(20, pointerY - drag.offsetY);
+    setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
+  }, [zoom]);
+
+  const onGlobalMouseUp = useCallback(() => {
+    dragStateRef.current = null;
+  }, []);
+
   useEffect(() => {
     window.addEventListener("mousemove", onGlobalMouseMove);
     window.addEventListener("mouseup", onGlobalMouseUp);
@@ -165,21 +180,6 @@ export default function FlowBuilder() {
     };
     e.preventDefault();
   };
-
-  const onGlobalMouseMove = useCallback((e) => {
-    const drag = dragStateRef.current;
-    if (!drag || !canvasRef.current) return;
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
-    const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
-    const nextX = Math.max(20, pointerX - drag.offsetX);
-    const nextY = Math.max(20, pointerY - drag.offsetY);
-    setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
-  }, [zoom]);
-
-  const onGlobalMouseUp = useCallback(() => {
-    dragStateRef.current = null;
-  }, []);
 
   const saveFlow = async () => {
     const err = validateAction(); if (err) return toast.warning(err);
