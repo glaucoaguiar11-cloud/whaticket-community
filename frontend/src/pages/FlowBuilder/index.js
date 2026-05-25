@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Button, Chip, Grid, MenuItem, Paper, TextField, Typography, makeStyles } from "@material-ui/core";
 import { Add, Save, Visibility } from "@material-ui/icons";
 import { toast } from "react-toastify";
@@ -77,6 +77,7 @@ const stencilItems = ["Início", "Conteúdo", "Menu", "Randomizador", "Intervalo
 export default function FlowBuilder() {
   const classes = useStyles();
   const canvasRef = useRef(null);
+  const dragStateRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [maximized, setMaximized] = useState(false);
 
@@ -116,6 +117,15 @@ export default function FlowBuilder() {
 
   useEffect(() => { setEdges(prev => prev.filter(e => byId[e.from] && byId[e.to])); }, [byId]);
 
+  useEffect(() => {
+    window.addEventListener("mousemove", onGlobalMouseMove);
+    window.addEventListener("mouseup", onGlobalMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onGlobalMouseMove);
+      window.removeEventListener("mouseup", onGlobalMouseUp);
+    };
+  }, [onGlobalMouseMove, onGlobalMouseUp]);
+
   const scrollCanvas = (dx, dy) => canvasRef.current?.scrollBy({ left: dx, top: dy, behavior: "smooth" });
 
   const validateAction = () => {
@@ -140,10 +150,36 @@ export default function FlowBuilder() {
     setEdges(prev => prev.find(e => e.from === selectedFrom && e.to === selectedTo) ? prev : [...prev, { from: selectedFrom, to: selectedTo }]);
   };
 
-  const onDragEnd = (id, e) => {
-    if (!e.clientX || !e.clientY) return;
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, x: Math.max(30, e.clientX - 240), y: Math.max(40, e.clientY - 150) } : n)));
+  const onNodeMouseDown = (id, e) => {
+    if (e.button !== 0) return;
+    if (!canvasRef.current) return;
+    const node = byId[id];
+    if (!node) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
+    const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
+    dragStateRef.current = {
+      id,
+      offsetX: pointerX - node.x,
+      offsetY: pointerY - node.y
+    };
+    e.preventDefault();
   };
+
+  const onGlobalMouseMove = useCallback((e) => {
+    const drag = dragStateRef.current;
+    if (!drag || !canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
+    const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
+    const nextX = Math.max(20, pointerX - drag.offsetX);
+    const nextY = Math.max(20, pointerY - drag.offsetY);
+    setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
+  }, [zoom]);
+
+  const onGlobalMouseUp = useCallback(() => {
+    dragStateRef.current = null;
+  }, []);
 
   const saveFlow = async () => {
     const err = validateAction(); if (err) return toast.warning(err);
@@ -211,9 +247,7 @@ export default function FlowBuilder() {
                   key={node.id}
                   className={classes.node}
                   style={{ left: node.x, top: node.y }}
-                  draggable
-                  onDragStart={e => e.dataTransfer && e.dataTransfer.setData("text/plain", node.id)}
-                  onDragEnd={e => onDragEnd(node.id, e)}
+                  onMouseDown={e => onNodeMouseDown(node.id, e)}
                 >
                   <div className={classes.nodeTitle}>{node.label}</div>
                   <div className={classes.nodeBody}>{node.value}</div>
