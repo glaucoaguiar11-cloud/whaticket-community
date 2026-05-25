@@ -8,7 +8,7 @@ const useStyles = makeStyles(theme => ({
   root: { display: "grid", gap: theme.spacing(1.5) },
   panel: { padding: theme.spacing(1.5), borderRadius: 10, border: "1px solid #e4e7ec", background: "#fff" },
   canvasShell: { position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #d7dbe5" },
-  topBar: { height: 8, background: "#8d3cff" },
+  topBar: { height: 8, background: "#2e7d32" },
   canvasWrap: { position: "relative", minHeight: 560, maxHeight: 680, background: "#f2f4f7", overflow: "auto" },
   canvas: { position: "relative", width: 2000, height: 980, transformOrigin: "top left" },
   node: {
@@ -184,7 +184,7 @@ export default function FlowBuilder() {
 
         <div className={classes.canvasShell}>
           <div className={classes.topBar} />
-          <Button className={classes.miniSave} variant="contained" style={{ background: "#8d3cff", color: "#fff" }} onClick={saveFlow}>SALVAR</Button>
+          <Button className={classes.miniSave} variant="contained" style={{ background: "#2e7d32", color: "#fff" }} onClick={saveFlow}>SALVAR</Button>
           <div className={classes.stencil}>
             {stencilItems.map((i, idx) => (
               <div key={i} className={classes.stencilItem}>
