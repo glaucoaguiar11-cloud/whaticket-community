@@ -9,7 +9,7 @@ const useStyles = makeStyles(theme => ({
   panel: { padding: theme.spacing(1.5), borderRadius: 10, border: "1px solid #e4e7ec", background: "#fff" },
   canvasShell: { position: "relative", borderRadius: 10, overflow: "hidden", border: "1px solid #d7dbe5" },
   topBar: { height: 8, background: "#2e7d32" },
-  canvasWrap: { position: "relative", minHeight: 560, maxHeight: 680, background: "#f2f4f7", overflow: "auto" },
+  canvasWrap: { position: "relative", minHeight: 560, maxHeight: 680, background: "#eef0f3", overflow: "auto" },
   canvas: { position: "relative", width: 2000, height: 980, transformOrigin: "top left" },
   node: {
     position: "absolute",
@@ -35,33 +35,33 @@ const useStyles = makeStyles(theme => ({
     top: 12,
     zIndex: 4,
     display: "grid",
-    gap: 7,
-    background: "rgba(255,255,255,.7)",
+    gap: 8,
+    background: "transparent",
     borderRadius: 999,
-    padding: 6
+    padding: 4
   },
   stencilItem: { display: "flex", alignItems: "center", gap: 8 },
   stencilDot: {
-    width: 24,
-    height: 24,
+    width: 26,
+    height: 26,
     borderRadius: "50%",
     display: "grid",
     placeItems: "center",
     fontSize: 11,
     color: "#243244",
     background: "#fff",
-    border: "1px solid #d6dbe6",
+    border: "1px solid #cfd6e3",
     boxShadow: "0 1px 4px rgba(0,0,0,.08)"
   },
   stencilLabel: {
     fontSize: 10,
-    background: "#fff",
-    border: "1px solid #dde2ec",
+    background: "#f7f8fb",
+    border: "1px solid #d8ddea",
     borderRadius: 6,
-    padding: "2px 6px",
+    padding: "2px 8px",
     color: "#6a7385"
   },
-  miniSave: { position: "absolute", right: 8, top: 14, zIndex: 4, minWidth: 70, height: 24, fontSize: 10 }
+  miniSave: { position: "absolute", right: 8, top: 14, zIndex: 4, minWidth: 72, height: 24, fontSize: 10, borderRadius: 4 }
 }));
 
 const nodeTypes = [
