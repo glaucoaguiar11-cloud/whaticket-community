@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import ReactFlow, { addEdge, Background, Controls, MiniMap, removeElements } from "react-flow-renderer";
+import ReactFlow, { Background, Controls, MiniMap, Handle, Position } from "react-flow-renderer";
 import { Button, Chip, Grid, MenuItem, Paper, TextField, Typography, makeStyles } from "@material-ui/core";
 import { Add, Save, Visibility } from "@material-ui/icons";
 import { toast } from "react-toastify";
@@ -21,13 +21,20 @@ const nodeTypes = [
   { value: "menu", label: "Menu" }
 ];
 
+const FlowNode = ({ data }) => (
+  <div style={{ borderRadius: 8, border: "1px solid #d6dbe6", padding: 8, width: 190, fontSize: 11, whiteSpace: "pre-line", background: "#fff" }}>
+    <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#4f6b95" }} />
+    <div>{data.label}</div>
+    <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#2e7d32" }} />
+  </div>
+);
+
 const toFlowElements = (nodes, edges) => ([
   ...nodes.map(n => ({
     id: n.id,
-    type: "default",
+    type: "flowNode",
     position: { x: n.x || 120, y: n.y || 120 },
-    data: { label: `${n.label}\n${n.value || ""}` },
-    style: { borderRadius: 8, border: "1px solid #d6dbe6", padding: 8, width: 180, fontSize: 11, whiteSpace: "pre-line" }
+    data: { label: `${n.label}\n${n.value || ""}` }
   })),
   ...edges.map((e, idx) => ({ id: `e-${e.from}-${e.to}-${idx}`, source: e.from, target: e.to, animated: false, style: { stroke: "#6e7f9e", strokeWidth: 1.7 } }))
 ]);
@@ -55,6 +62,7 @@ export default function FlowBuilder() {
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
   const elements = useMemo(() => toFlowElements(nodes, edges), [nodes, edges]);
+  const rfNodeTypes = useMemo(() => ({ flowNode: FlowNode }), []);
 
   const loadFlows = async () => {
     try { const { data } = await api.get("/flows"); setSavedFlows(Array.isArray(data) ? data : []); }
@@ -131,6 +139,7 @@ export default function FlowBuilder() {
         <div className={classes.topBar} />
         <ReactFlow
           elements={elements}
+          nodeTypes={rfNodeTypes}
           onConnect={onConnect}
           onElementsRemove={onElementsRemove}
           deleteKeyCode={46}
