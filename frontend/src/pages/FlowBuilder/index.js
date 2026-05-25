@@ -105,6 +105,7 @@ export default function FlowBuilder() {
   const [savedFlows, setSavedFlows] = useState([]);
   const [linkingFrom, setLinkingFrom] = useState(null);
   const [linkPointer, setLinkPointer] = useState(null);
+  const [hoverTarget, setHoverTarget] = useState(null);
 
   const [nodes, setNodes] = useState([
     { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 150 },
@@ -137,6 +138,19 @@ export default function FlowBuilder() {
 
     if (linkingFrom) {
       setLinkPointer({ x: pointerX, y: pointerY });
+      let near = null;
+      let minDist = Infinity;
+      nodes.forEach(n => {
+        if (n.id === linkingFrom) return;
+        const tx = n.x;
+        const ty = n.y + 28;
+        const dist = Math.hypot(pointerX - tx, pointerY - ty);
+        if (dist < minDist) {
+          minDist = dist;
+          near = n.id;
+        }
+      });
+      setHoverTarget(minDist <= 90 ? near : null);
     }
 
     const drag = dragStateRef.current;
@@ -144,11 +158,17 @@ export default function FlowBuilder() {
     const nextX = Math.max(20, pointerX - drag.offsetX);
     const nextY = Math.max(20, pointerY - drag.offsetY);
     setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
-  }, [zoom, linkingFrom]);
+  }, [zoom, linkingFrom, nodes]);
 
   const onGlobalMouseUp = useCallback(() => {
     dragStateRef.current = null;
-  }, []);
+    if (linkingFrom && hoverTarget && linkingFrom !== hoverTarget) {
+      setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === hoverTarget) ? prev : [...prev, { from: linkingFrom, to: hoverTarget }]);
+      setLinkingFrom(null);
+      setLinkPointer(null);
+      setHoverTarget(null);
+    }
+  }, [linkingFrom, hoverTarget]);
 
   useEffect(() => {
     window.addEventListener("mousemove", onGlobalMouseMove);
@@ -191,6 +211,7 @@ export default function FlowBuilder() {
     const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
     setLinkingFrom(id);
     setLinkPointer({ x: pointerX, y: pointerY });
+    setHoverTarget(null);
   };
 
   const onFinishLink = (id, e) => {
@@ -199,11 +220,13 @@ export default function FlowBuilder() {
     if (linkingFrom === id) {
       setLinkingFrom(null);
       setLinkPointer(null);
+      setHoverTarget(null);
       return;
     }
     setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === id) ? prev : [...prev, { from: linkingFrom, to: id }]);
     setLinkingFrom(null);
     setLinkPointer(null);
+    setHoverTarget(null);
   };
 
   const onNodeMouseDown = (id, e) => {
@@ -239,7 +262,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={addConnection}>Conectar</Button></Grid>
-          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique no ponto de entrada)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); }} /></Grid>}
+          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (arraste/solte perto do bloco de destino)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); setHoverTarget(null); }} /></Grid>}
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item><Button variant="contained" style={{ background: "#8d3cff", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar</Button></Grid>
         </Grid>
@@ -300,7 +323,7 @@ export default function FlowBuilder() {
                 >
                   <div
                     className={classes.nodeHandle}
-                    style={{ left: -6, top: "50%", transform: "translateY(-50%)", background: "#4f6b95" }}
+                    style={{ left: -6, top: "50%", transform: "translateY(-50%)", background: hoverTarget === node.id ? "#2e7d32" : "#4f6b95", boxShadow: hoverTarget === node.id ? "0 0 0 3px rgba(46,125,50,.22)" : "0 0 0 1px #9eb3d1" }}
                     onMouseDown={e => onFinishLink(node.id, e)}
                     title="Entrada"
                   />
