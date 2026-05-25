@@ -104,6 +104,7 @@ export default function FlowBuilder() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedFlows, setSavedFlows] = useState([]);
   const [linkingFrom, setLinkingFrom] = useState(null);
+  const [linkPointer, setLinkPointer] = useState(null);
 
   const [nodes, setNodes] = useState([
     { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 150 },
@@ -129,15 +130,21 @@ export default function FlowBuilder() {
   useEffect(() => { setEdges(prev => prev.filter(e => byId[e.from] && byId[e.to])); }, [byId]);
 
   const onGlobalMouseMove = useCallback((e) => {
-    const drag = dragStateRef.current;
-    if (!drag || !canvasRef.current) return;
+    if (!canvasRef.current) return;
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
     const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
+
+    if (linkingFrom) {
+      setLinkPointer({ x: pointerX, y: pointerY });
+    }
+
+    const drag = dragStateRef.current;
+    if (!drag) return;
     const nextX = Math.max(20, pointerX - drag.offsetX);
     const nextY = Math.max(20, pointerY - drag.offsetY);
     setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
-  }, [zoom]);
+  }, [zoom, linkingFrom]);
 
   const onGlobalMouseUp = useCallback(() => {
     dragStateRef.current = null;
@@ -178,7 +185,12 @@ export default function FlowBuilder() {
 
   const onStartLink = (id, e) => {
     e.stopPropagation();
+    if (!canvasRef.current) return;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const pointerX = (e.clientX - canvasRect.left + canvasRef.current.scrollLeft) / zoom;
+    const pointerY = (e.clientY - canvasRect.top + canvasRef.current.scrollTop) / zoom;
     setLinkingFrom(id);
+    setLinkPointer({ x: pointerX, y: pointerY });
   };
 
   const onFinishLink = (id, e) => {
@@ -186,10 +198,12 @@ export default function FlowBuilder() {
     if (!linkingFrom) return;
     if (linkingFrom === id) {
       setLinkingFrom(null);
+      setLinkPointer(null);
       return;
     }
     setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === id) ? prev : [...prev, { from: linkingFrom, to: id }]);
     setLinkingFrom(null);
+    setLinkPointer(null);
   };
 
   const onNodeMouseDown = (id, e) => {
@@ -225,7 +239,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={addConnection}>Conectar</Button></Grid>
-          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique no ponto de entrada)`} onDelete={() => setLinkingFrom(null)} /></Grid>}
+          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique no ponto de entrada)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); }} /></Grid>}
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item><Button variant="contained" style={{ background: "#8d3cff", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar</Button></Grid>
         </Grid>
@@ -269,6 +283,13 @@ export default function FlowBuilder() {
                   const mx = (x1 + x2) / 2;
                   return <path key={`${edge.from}-${edge.to}-${idx}`} d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} stroke="#7f8faa" strokeWidth="1.7" fill="none" />;
                 })}
+                {linkingFrom && byId[linkingFrom] && linkPointer && (() => {
+                  const from = byId[linkingFrom];
+                  const x1 = from.x + 170; const y1 = from.y + 28;
+                  const x2 = linkPointer.x; const y2 = linkPointer.y;
+                  const mx = (x1 + x2) / 2;
+                  return <path d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`} stroke="#2e7d32" strokeWidth="2" strokeDasharray="6 4" fill="none" />;
+                })()}
               </svg>
               {nodes.map(node => (
                 <div
