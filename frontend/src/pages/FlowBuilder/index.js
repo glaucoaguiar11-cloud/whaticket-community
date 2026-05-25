@@ -106,6 +106,7 @@ export default function FlowBuilder() {
   const [linkingFrom, setLinkingFrom] = useState(null);
   const [linkPointer, setLinkPointer] = useState(null);
   const [hoverTarget, setHoverTarget] = useState(null);
+  const [isLinkMode, setIsLinkMode] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState("n1");
 
   const [nodes, setNodes] = useState([
@@ -130,6 +131,7 @@ export default function FlowBuilder() {
         setLinkingFrom(null);
         setLinkPointer(null);
         setHoverTarget(null);
+        setIsLinkMode(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -216,6 +218,7 @@ export default function FlowBuilder() {
     setLinkingFrom(id);
     setLinkPointer({ x: pointerX, y: pointerY });
     setHoverTarget(null);
+    setIsLinkMode(true);
   };
 
   const finishLinkTo = (id) => {
@@ -224,12 +227,14 @@ export default function FlowBuilder() {
       setLinkingFrom(null);
       setLinkPointer(null);
       setHoverTarget(null);
+      setIsLinkMode(false);
       return;
     }
     setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === id) ? prev : [...prev, { from: linkingFrom, to: id }]);
     setLinkingFrom(null);
     setLinkPointer(null);
     setHoverTarget(null);
+    setIsLinkMode(false);
   };
 
   const onFinishLink = (id, e) => {
@@ -238,7 +243,7 @@ export default function FlowBuilder() {
   };
 
   const onNodeMouseDown = (id, e) => {
-    if (linkingFrom) return;
+    if (isLinkMode || linkingFrom) return;
     if (e.button !== 0) return;
     if (!canvasRef.current) return;
     const node = byId[id];
@@ -275,7 +280,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={addConnection}>Conectar</Button></Grid>
-          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique na entrada ou no bloco destino)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); setHoverTarget(null); }} /></Grid>}
+          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique na entrada ou no bloco destino)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); setHoverTarget(null); setIsLinkMode(false); }} /></Grid>}
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item xs={12} md={6}>
             <TextField
