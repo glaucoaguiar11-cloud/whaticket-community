@@ -140,7 +140,7 @@ export default function FlowBuilder() {
     setEdges(prev => prev.find(e => e.from === selectedFrom && e.to === selectedTo) ? prev : [...prev, { from: selectedFrom, to: selectedTo }]);
   };
 
-  const onDrag = (id, e) => {
+  const onDragEnd = (id, e) => {
     if (!e.clientX || !e.clientY) return;
     setNodes(prev => prev.map(n => (n.id === id ? { ...n, x: Math.max(30, e.clientX - 240), y: Math.max(40, e.clientY - 150) } : n)));
   };
@@ -207,7 +207,14 @@ export default function FlowBuilder() {
                 })}
               </svg>
               {nodes.map(node => (
-                <div key={node.id} className={classes.node} style={{ left: node.x, top: node.y }} draggable onDrag={e => onDrag(node.id, e)}>
+                <div
+                  key={node.id}
+                  className={classes.node}
+                  style={{ left: node.x, top: node.y }}
+                  draggable
+                  onDragStart={e => e.dataTransfer && e.dataTransfer.setData("text/plain", node.id)}
+                  onDragEnd={e => onDragEnd(node.id, e)}
+                >
                   <div className={classes.nodeTitle}>{node.label}</div>
                   <div className={classes.nodeBody}>{node.value}</div>
                 </div>
