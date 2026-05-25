@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, MiniMap, Handle, Position } from "react-flow-renderer";
-import { Button, Chip, Grid, MenuItem, Paper, TextField, Typography, makeStyles } from "@material-ui/core";
+import { Button, Grid, MenuItem, Paper, TextField, Typography, makeStyles } from "@material-ui/core";
 import { Add, Save, Visibility } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
@@ -8,9 +8,12 @@ import api from "../../services/api";
 const useStyles = makeStyles(theme => ({
   root: { display: "grid", gap: theme.spacing(1.5) },
   panel: { padding: theme.spacing(1.5), borderRadius: 10, border: "1px solid #e4e7ec", background: "#fff" },
-  flowShell: { height: 640, border: "1px solid #d7dbe5", borderRadius: 10, overflow: "hidden" },
+  flowShell: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, overflow: "hidden" },
   topBar: { height: 8, background: "#2e7d32" },
-  review: { marginTop: theme.spacing(1), padding: theme.spacing(1), border: "1px dashed #c8ced9", borderRadius: 8, background: "#fbfcfe" }
+  review: { marginTop: theme.spacing(1), padding: theme.spacing(1), border: "1px dashed #c8ced9", borderRadius: 8, background: "#fbfcfe" },
+  editorPanel: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, background: "#fff", padding: 12, overflow: "auto" },
+  editorTitle: { fontWeight: 700, marginBottom: 10, color: "#334155" },
+  editorSection: { marginTop: 10 }
 }));
 
 const nodeTypes = [
@@ -57,119 +60,128 @@ const toFlowElements = (nodes, edges, selectedNodeId) => ([
 
 export default function FlowBuilder() {
   const classes = useStyles();
-
   const [flowName, setFlowName] = useState("Novo fluxo");
   const [keywords, setKeywords] = useState("");
   const [newType, setNewType] = useState("message");
   const [replyMessage, setReplyMessage] = useState("Olá! Como posso ajudar?");
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [webhookMethod, setWebhookMethod] = useState("POST");
-  const [webhookPayload, setWebhookPayload] = useState('{"ticketId":"{{ticket.id}}","message":"{{message.body}}"}');
-  const [kanbanColumn, setKanbanColumn] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedFlows, setSavedFlows] = useState([]);
 
   const [nodes, setNodes] = useState([
-    { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 180 },
-    { id: "n1", type: "message", label: "Exibir mensagem", value: "Olá! Como posso ajudar?", x: 380, y: 180 }
+    { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 180, config: {} },
+    { id: "n1", type: "message", label: "Exibir mensagem", value: "Olá! Como posso ajudar?", x: 380, y: 180, config: {} }
   ]);
   const [edges, setEdges] = useState([{ from: "start", to: "n1" }]);
   const [selectedNodeId, setSelectedNodeId] = useState("n1");
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
+  const selectedNode = byId[selectedNodeId];
   const elements = useMemo(() => toFlowElements(nodes, edges, selectedNodeId), [nodes, edges, selectedNodeId]);
   const rfNodeTypes = useMemo(() => ({ flowNode: FlowNode }), []);
 
-  const loadFlows = async () => {
-    try { const { data } = await api.get("/flows"); setSavedFlows(Array.isArray(data) ? data : []); }
-    catch { toast.warning("Não foi possível carregar os fluxos salvos"); }
-  };
-
-  useEffect(() => { loadFlows(); }, []);
-
-  const validateAction = () => {
-    if (!flowName.trim()) return "Informe o nome do fluxo.";
-    if (!keywords.trim()) return "Informe ao menos 1 palavra-chave.";
-    if (newType === "message" && !replyMessage.trim()) return "A resposta automática está vazia.";
-    if (newType === "webhook") { if (!webhookUrl.trim()) return "Informe a URL do webhook."; try { new URL(webhookUrl); } catch { return "URL do webhook inválida."; } }
-    if (newType === "kanban" && !kanbanColumn) return "Selecione a coluna do Kanban.";
-    return null;
-  };
+  useEffect(() => { (async () => { try { const { data } = await api.get("/flows"); setSavedFlows(Array.isArray(data) ? data : []); } catch { toast.warning("Não foi possível carregar os fluxos salvos"); } })(); }, []);
 
   const addNode = () => {
-    const err = validateAction(); if (err) return toast.warning(err);
+    if (!flowName.trim() || !keywords.trim()) return toast.warning("Preencha nome e palavras-chave");
     const id = `n${Date.now()}`;
     const label = nodeTypes.find(t => t.value === newType)?.label || "Bloco";
-    const value = newType === "message" ? replyMessage : newType === "webhook" ? `${webhookMethod} ${webhookUrl || "URL pendente"}` : newType === "kanban" ? `Mover para: ${kanbanColumn || "coluna pendente"}` : "Configurar...";
-    setNodes(prev => [...prev, { id, type: newType, label, value, x: 620, y: 120 + (prev.length % 6) * 90 }]);
+    const value = newType === "message" ? replyMessage : "Configurar...";
+    setNodes(prev => [...prev, { id, type: newType, label, value, x: 620, y: 120 + (prev.length % 6) * 90, config: {} }]);
     setSelectedNodeId(id);
   };
 
-  const onConnect = params => {
-    setEdges(prev => {
-      if (prev.find(e => e.from === params.source && e.to === params.target)) return prev;
-      return [...prev, { from: params.source, to: params.target }];
-    });
-  };
+  const updateNode = patch => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, ...patch } : n)));
+  const updateNodeConfig = (key, value) => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, config: { ...(n.config || {}), [key]: value } } : n)));
 
-  const onElementsRemove = elementsToRemove => {
-    const ids = new Set(elementsToRemove.map(el => el.id));
-    setNodes(prev => prev.filter(n => !ids.has(n.id)));
-    setEdges(prev => prev.filter(e => !ids.has(`e-${e.from}-${e.to}-0`) && !ids.has(e.from) && !ids.has(e.to)));
-  };
-
-  const onNodeDragStop = (_e, node) => {
-    setNodes(prev => prev.map(n => (n.id === node.id ? { ...n, x: node.position.x, y: node.position.y } : n)));
-  };
-
-  const updateNodeValue = (id, value) => {
-    setNodes(prev => prev.map(n => (n.id === id ? { ...n, value } : n)));
-  };
+  const onConnect = p => setEdges(prev => prev.find(e => e.from === p.source && e.to === p.target) ? prev : [...prev, { from: p.source, to: p.target }]);
+  const onNodeDragStop = (_e, node) => setNodes(prev => prev.map(n => (n.id === node.id ? { ...n, x: node.position.x, y: node.position.y } : n)));
 
   const saveFlow = async () => {
-    const err = validateAction(); if (err) return toast.warning(err);
-    const visualPayload = { version: 3, metadata: { flowName, keywords }, actionDefaults: { newType, replyMessage, webhookUrl, webhookMethod, webhookPayload, kanbanColumn }, nodes, edges, updatedAt: new Date().toISOString() };
-    const actionValue = newType === "message" ? replyMessage : newType === "webhook" ? JSON.stringify({ url: webhookUrl, method: webhookMethod, payload: webhookPayload }) : newType === "kanban" ? kanbanColumn : "";
-    try { await api.post("/flows", { name: flowName, triggerType: "message_received", containsText: keywords, actionType: newType, actionValue, isActive: true, visualPayload }); toast.success("Fluxo salvo no backend com sucesso"); loadFlows(); }
-    catch { localStorage.setItem("flowbuilder.visual.v3", JSON.stringify(visualPayload)); toast.warning("Backend indisponível. Salvo localmente para teste."); }
+    const visualPayload = { version: 4, metadata: { flowName, keywords }, nodes, edges, updatedAt: new Date().toISOString() };
+    try { await api.post("/flows", { name: flowName, triggerType: "message_received", containsText: keywords, actionType: newType, actionValue: replyMessage, isActive: true, visualPayload }); toast.success("Fluxo salvo no backend"); }
+    catch { localStorage.setItem("flowbuilder.visual.v4", JSON.stringify(visualPayload)); toast.warning("Salvo localmente para teste"); }
   };
 
   return (
     <div className={classes.root}>
       <Paper className={classes.panel} elevation={0}>
         <Grid container spacing={1} alignItems="center">
-          <Grid item xs={12} md={4}><TextField fullWidth label="Nome do fluxo" variant="outlined" size="small" value={flowName} onChange={e => setFlowName(e.target.value)} /></Grid>
-          <Grid item xs={12} md={5}><TextField fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
+          <Grid item xs={12} md={3}><TextField fullWidth label="Nome do fluxo" variant="outlined" size="small" value={flowName} onChange={e => setFlowName(e.target.value)} /></Grid>
+          <Grid item xs={12} md={4}><TextField fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item><Button variant="contained" style={{ background: "#2e7d32", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar</Button></Grid>
-          <Grid item xs={12} md={6}>
-            <TextField fullWidth label="Editar mensagem do bloco selecionado" variant="outlined" size="small" value={(byId[selectedNodeId] && byId[selectedNodeId].value) || ""} onChange={e => updateNodeValue(selectedNodeId, e.target.value)} disabled={!selectedNodeId || !byId[selectedNodeId]} />
-          </Grid>
         </Grid>
         {reviewOpen && <div className={classes.review}><Typography variant="body2">SE mensagem contém: {keywords || "(não informado)"}</Typography></div>}
       </Paper>
 
-      <div className={classes.flowShell}>
-        <div className={classes.topBar} />
-        <ReactFlow
-          elements={elements}
-          nodeTypes={rfNodeTypes}
-          onConnect={onConnect}
-          onElementsRemove={onElementsRemove}
-          deleteKeyCode={46}
-          onNodeDragStop={onNodeDragStop}
-          onElementClick={(_e, el) => { if (el.source || el.target) return; setSelectedNodeId(el.id); }}
-          snapToGrid
-          snapGrid={[10, 10]}
-          connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}
-        >
-          <MiniMap />
-          <Controls />
-          <Background color="#dce1e9" gap={22} />
-        </ReactFlow>
-      </div>
+      <Grid container spacing={2}>
+        <Grid item xs={12} md={8}>
+          <div className={classes.flowShell}>
+            <div className={classes.topBar} />
+            <ReactFlow
+              elements={elements}
+              nodeTypes={rfNodeTypes}
+              onConnect={onConnect}
+              deleteKeyCode={46}
+              onNodeDragStop={onNodeDragStop}
+              onElementClick={(_e, el) => { if (!el.source && !el.target) setSelectedNodeId(el.id); }}
+              snapToGrid
+              snapGrid={[10, 10]}
+              connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}
+            >
+              <MiniMap />
+              <Controls />
+              <Background color="#dce1e9" gap={22} />
+            </ReactFlow>
+          </div>
+        </Grid>
+
+        <Grid item xs={12} md={4}>
+          <div className={classes.editorPanel}>
+            <Typography className={classes.editorTitle}>Propriedades do Bloco</Typography>
+            {selectedNode ? (
+              <>
+                <TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} />
+                <div className={classes.editorSection}>
+                  <TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled />
+                </div>
+
+                {(selectedNode.type === "message" || selectedNode.type === "start") && (
+                  <div className={classes.editorSection}>
+                    <TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} />
+                  </div>
+                )}
+
+                {selectedNode.type === "webhook" && (
+                  <>
+                    <div className={classes.editorSection}><TextField fullWidth label="URL do Webhook" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.url) || ""} onChange={e => updateNodeConfig("url", e.target.value)} /></div>
+                    <div className={classes.editorSection}><TextField select fullWidth label="Método" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.method) || "POST"} onChange={e => updateNodeConfig("method", e.target.value)}><MenuItem value="POST">POST</MenuItem><MenuItem value="GET">GET</MenuItem><MenuItem value="PUT">PUT</MenuItem></TextField></div>
+                    <div className={classes.editorSection}><TextField fullWidth multiline minRows={4} label="Payload" variant="outlined" value={(selectedNode.config && selectedNode.config.payload) || "{}"} onChange={e => updateNodeConfig("payload", e.target.value)} /></div>
+                  </>
+                )}
+
+                {selectedNode.type === "kanban" && (
+                  <div className={classes.editorSection}><TextField fullWidth label="Coluna destino" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.column) || ""} onChange={e => updateNodeConfig("column", e.target.value)} /></div>
+                )}
+
+                {selectedNode.type === "condition" && (
+                  <>
+                    <div className={classes.editorSection}><TextField fullWidth label="Variável" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.varName) || ""} onChange={e => updateNodeConfig("varName", e.target.value)} /></div>
+                    <div className={classes.editorSection}><TextField select fullWidth label="Operador" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.operator) || "contains"} onChange={e => updateNodeConfig("operator", e.target.value)}><MenuItem value="contains">contains</MenuItem><MenuItem value="equals">equals</MenuItem><MenuItem value="startsWith">startsWith</MenuItem></TextField></div>
+                    <div className={classes.editorSection}><TextField fullWidth label="Valor" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.value) || ""} onChange={e => updateNodeConfig("value", e.target.value)} /></div>
+                  </>
+                )}
+
+                {selectedNode.type === "menu" && (
+                  <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Opções (uma por linha)" variant="outlined" value={(selectedNode.config && selectedNode.config.options) || "1 - Opção A\n2 - Opção B"} onChange={e => updateNodeConfig("options", e.target.value)} /></div>
+                )}
+              </>
+            ) : <Typography variant="body2">Selecione um bloco para editar.</Typography>}
+          </div>
+        </Grid>
+      </Grid>
 
       <Paper className={classes.panel} elevation={0}><Typography variant="subtitle2">Fluxos salvos: {savedFlows.length}</Typography></Paper>
     </div>
