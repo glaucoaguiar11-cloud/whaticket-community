@@ -148,21 +148,6 @@ export default function FlowBuilder() {
 
     if (linkingFrom) {
       setLinkPointer({ x: pointerX, y: pointerY });
-      let near = null;
-      let minDist = Infinity;
-      const sourceNode = byId[linkingFrom];
-      nodes.forEach(n => {
-        if (n.id === linkingFrom) return;
-        if (sourceNode && n.x < sourceNode.x + 30) return; // prioriza conexão para a direita
-        const tx = n.x;
-        const ty = n.y + 28;
-        const dist = Math.hypot(pointerX - tx, pointerY - ty);
-        if (dist < minDist) {
-          minDist = dist;
-          near = n.id;
-        }
-      });
-      setHoverTarget(minDist <= 130 ? near : null);
     }
 
     const drag = dragStateRef.current;
@@ -170,7 +155,7 @@ export default function FlowBuilder() {
     const nextX = Math.max(20, pointerX - drag.offsetX);
     const nextY = Math.max(20, pointerY - drag.offsetY);
     setNodes(prev => prev.map(n => (n.id === drag.id ? { ...n, x: nextX, y: nextY } : n)));
-  }, [zoom, linkingFrom, nodes, byId]);
+  }, [zoom, linkingFrom]);
 
   const onGlobalMouseUp = useCallback(() => {
     dragStateRef.current = null;
@@ -210,6 +195,7 @@ export default function FlowBuilder() {
   };
 
   const onStartLink = (id, e) => {
+    e.preventDefault();
     e.stopPropagation();
     if (!canvasRef.current) return;
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -280,7 +266,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={addConnection}>Conectar</Button></Grid>
-          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique na entrada ou no bloco destino)`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); setHoverTarget(null); setIsLinkMode(false); }} /></Grid>}
+          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique na entrada ou no bloco destino (Esc cancela))`} onDelete={() => { setLinkingFrom(null); setLinkPointer(null); setHoverTarget(null); setIsLinkMode(false); }} /></Grid>}
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item xs={12} md={6}>
             <TextField
@@ -356,7 +342,7 @@ export default function FlowBuilder() {
                 >
                   <div
                     className={classes.nodeHandle}
-                    style={{ left: -6, top: "50%", transform: "translateY(-50%)", background: hoverTarget === node.id ? "#2e7d32" : "#4f6b95", boxShadow: hoverTarget === node.id ? "0 0 0 3px rgba(46,125,50,.22)" : "0 0 0 1px #9eb3d1" }}
+                    style={{ left: -6, top: "50%", transform: "translateY(-50%)", background: "#4f6b95", boxShadow: "0 0 0 1px #9eb3d1" }}
                     onMouseDown={e => onFinishLink(node.id, e)}
                     title="Entrada"
                   />
