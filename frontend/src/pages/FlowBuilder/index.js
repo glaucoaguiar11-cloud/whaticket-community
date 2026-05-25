@@ -22,6 +22,16 @@ const useStyles = makeStyles(theme => ({
     padding: "6px 8px",
     cursor: "move"
   },
+  nodeHandle: {
+    position: "absolute",
+    width: 10,
+    height: 10,
+    borderRadius: "50%",
+    background: "#2e7d32",
+    border: "2px solid #fff",
+    boxShadow: "0 0 0 1px #9eb3d1",
+    cursor: "crosshair"
+  },
   nodeTitle: { fontWeight: 600, fontSize: 11, color: "#384152" },
   nodeBody: { fontSize: 10, opacity: 0.9, marginTop: 3, whiteSpace: "pre-line", color: "#5a6474" },
   svg: { position: "absolute", inset: 0, pointerEvents: "none" },
@@ -93,6 +103,7 @@ export default function FlowBuilder() {
   const [kanbanColumn, setKanbanColumn] = useState("");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedFlows, setSavedFlows] = useState([]);
+  const [linkingFrom, setLinkingFrom] = useState(null);
 
   const [nodes, setNodes] = useState([
     { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 150 },
@@ -165,6 +176,22 @@ export default function FlowBuilder() {
     setEdges(prev => prev.find(e => e.from === selectedFrom && e.to === selectedTo) ? prev : [...prev, { from: selectedFrom, to: selectedTo }]);
   };
 
+  const onStartLink = (id, e) => {
+    e.stopPropagation();
+    setLinkingFrom(id);
+  };
+
+  const onFinishLink = (id, e) => {
+    e.stopPropagation();
+    if (!linkingFrom) return;
+    if (linkingFrom === id) {
+      setLinkingFrom(null);
+      return;
+    }
+    setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === id) ? prev : [...prev, { from: linkingFrom, to: id }]);
+    setLinkingFrom(null);
+  };
+
   const onNodeMouseDown = (id, e) => {
     if (e.button !== 0) return;
     if (!canvasRef.current) return;
@@ -198,6 +225,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={addConnection}>Conectar</Button></Grid>
+          {linkingFrom && <Grid item><Chip size="small" label={`Conectando: ${linkingFrom} (clique no ponto de entrada)`} onDelete={() => setLinkingFrom(null)} /></Grid>}
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item><Button variant="contained" style={{ background: "#8d3cff", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar</Button></Grid>
         </Grid>
@@ -249,6 +277,18 @@ export default function FlowBuilder() {
                   style={{ left: node.x, top: node.y }}
                   onMouseDown={e => onNodeMouseDown(node.id, e)}
                 >
+                  <div
+                    className={classes.nodeHandle}
+                    style={{ left: -6, top: "50%", transform: "translateY(-50%)", background: "#4f6b95" }}
+                    onMouseDown={e => onFinishLink(node.id, e)}
+                    title="Entrada"
+                  />
+                  <div
+                    className={classes.nodeHandle}
+                    style={{ right: -6, top: "50%", transform: "translateY(-50%)" }}
+                    onMouseDown={e => onStartLink(node.id, e)}
+                    title="Saída"
+                  />
                   <div className={classes.nodeTitle}>{node.label}</div>
                   <div className={classes.nodeBody}>{node.value}</div>
                 </div>
