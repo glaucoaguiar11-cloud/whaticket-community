@@ -21,22 +21,38 @@ const nodeTypes = [
   { value: "menu", label: "Menu" }
 ];
 
-const FlowNode = ({ data }) => (
-  <div style={{ borderRadius: 8, border: "1px solid #d6dbe6", padding: 8, width: 190, fontSize: 11, whiteSpace: "pre-line", background: "#fff" }}>
-    <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: "#4f6b95" }} />
-    <div>{data.label}</div>
-    <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: "#2e7d32" }} />
-  </div>
-);
+const typeMeta = {
+  start: { icon: "🏁", color: "#475569", bg: "#f1f5f9" },
+  message: { icon: "💬", color: "#2563eb", bg: "#eff6ff" },
+  webhook: { icon: "🔗", color: "#7c3aed", bg: "#f5f3ff" },
+  kanban: { icon: "📌", color: "#0f766e", bg: "#f0fdfa" },
+  condition: { icon: "🔀", color: "#b45309", bg: "#fffbeb" },
+  menu: { icon: "📋", color: "#1d4ed8", bg: "#eff6ff" }
+};
 
-const toFlowElements = (nodes, edges) => ([
+const FlowNode = ({ data }) => {
+  const meta = typeMeta[data.type] || { icon: "🧩", color: "#334155", bg: "#f8fafc" };
+  return (
+    <div style={{ borderRadius: 12, border: `1px solid ${data.selected ? "#2e7d32" : "#d6dbe6"}`, boxShadow: data.selected ? "0 0 0 3px rgba(46,125,50,.15), 0 8px 18px rgba(15,23,42,.12)" : "0 4px 12px rgba(15,23,42,.08)", width: 220, fontSize: 11, background: "#fff", overflow: "hidden" }}>
+      <Handle type="target" position={Position.Left} style={{ width: 14, height: 14, background: "#4f6b95", border: "2px solid #fff", boxShadow: "0 0 0 2px rgba(79,107,149,.25)" }} />
+      <div style={{ padding: "6px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", background: meta.bg, borderBottom: "1px solid #e2e8f0" }}>
+        <span style={{ fontWeight: 700, color: meta.color }}>{meta.icon} {data.title}</span>
+        <span style={{ fontSize: 10, color: "#64748b" }}>{data.type}</span>
+      </div>
+      <div style={{ padding: "8px 10px", color: "#334155", whiteSpace: "pre-line", minHeight: 44 }}>{data.value || "(sem conteúdo)"}</div>
+      <Handle type="source" position={Position.Right} style={{ width: 14, height: 14, background: "#2e7d32", border: "2px solid #fff", boxShadow: "0 0 0 2px rgba(46,125,50,.25)" }} />
+    </div>
+  );
+};
+
+const toFlowElements = (nodes, edges, selectedNodeId) => ([
   ...nodes.map(n => ({
     id: n.id,
     type: "flowNode",
     position: { x: n.x || 120, y: n.y || 120 },
-    data: { label: `${n.label}\n${n.value || ""}` }
+    data: { title: n.label, value: n.value || "", type: n.type, selected: n.id === selectedNodeId }
   })),
-  ...edges.map((e, idx) => ({ id: `e-${e.from}-${e.to}-${idx}`, source: e.from, target: e.to, animated: false, style: { stroke: "#6e7f9e", strokeWidth: 1.7 } }))
+  ...edges.map((e, idx) => ({ id: `e-${e.from}-${e.to}-${idx}`, source: e.from, target: e.to, animated: true, style: { stroke: "#64748b", strokeWidth: 2 }, markerEnd: { type: "arrowclosed", color: "#64748b" } }))
 ]);
 
 export default function FlowBuilder() {
@@ -61,7 +77,7 @@ export default function FlowBuilder() {
   const [selectedNodeId, setSelectedNodeId] = useState("n1");
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
-  const elements = useMemo(() => toFlowElements(nodes, edges), [nodes, edges]);
+  const elements = useMemo(() => toFlowElements(nodes, edges, selectedNodeId), [nodes, edges, selectedNodeId]);
   const rfNodeTypes = useMemo(() => ({ flowNode: FlowNode }), []);
 
   const loadFlows = async () => {
