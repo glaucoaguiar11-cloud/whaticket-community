@@ -123,7 +123,14 @@ export default function FlowBuilder() {
 
   useEffect(() => { loadFlows(); }, []);
   useEffect(() => {
-    const onKeyDown = e => { if (e.key === "Escape") setMaximized(false); };
+    const onKeyDown = e => {
+      if (e.key === "Escape") {
+        setMaximized(false);
+        setLinkingFrom(null);
+        setLinkPointer(null);
+        setHoverTarget(null);
+      }
+    };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
@@ -164,13 +171,7 @@ export default function FlowBuilder() {
 
   const onGlobalMouseUp = useCallback(() => {
     dragStateRef.current = null;
-    if (linkingFrom && hoverTarget && linkingFrom !== hoverTarget) {
-      setEdges(prev => prev.find(edge => edge.from === linkingFrom && edge.to === hoverTarget) ? prev : [...prev, { from: linkingFrom, to: hoverTarget }]);
-      setLinkingFrom(null);
-      setLinkPointer(null);
-      setHoverTarget(null);
-    }
-  }, [linkingFrom, hoverTarget]);
+  }, []);
 
   useEffect(() => {
     window.addEventListener("mousemove", onGlobalMouseMove);
