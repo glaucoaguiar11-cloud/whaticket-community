@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, MiniMap, Handle, Position } from "react-flow-renderer";
-import { Button, Grid, MenuItem, Paper, TextField, Typography, makeStyles } from "@material-ui/core";
-import { Add, Save, Visibility } from "@material-ui/icons";
+import { Button, Grid, IconButton, MenuItem, Paper, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography, makeStyles } from "@material-ui/core";
+import { Add, ArrowBack, Delete, Edit, Save, Visibility } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 
@@ -13,7 +13,8 @@ const useStyles = makeStyles(theme => ({
   review: { marginTop: theme.spacing(1), padding: theme.spacing(1), border: "1px dashed #c8ced9", borderRadius: 8, background: "#fbfcfe" },
   editorPanel: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, background: "#fff", padding: 12, overflow: "auto" },
   editorTitle: { fontWeight: 700, marginBottom: 10, color: "#334155" },
-  editorSection: { marginTop: 10 }
+  editorSection: { marginTop: 10 },
+  rowClickable: { cursor: "pointer" }
 }));
 
 const nodeTypes = [
@@ -33,6 +34,13 @@ const typeMeta = {
   menu: { icon: "📋", color: "#1d4ed8", bg: "#eff6ff" }
 };
 
+const defaultNodes = [
+  { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 180, config: {} },
+  { id: "n1", type: "message", label: "Exibir mensagem", value: "Olá! Como posso ajudar?", x: 380, y: 180, config: {} }
+];
+
+const defaultEdges = [{ from: "start", to: "n1" }];
+
 const FlowNode = ({ data }) => {
   const meta = typeMeta[data.type] || { icon: "🧩", color: "#334155", bg: "#f8fafc" };
   return (
@@ -49,29 +57,23 @@ const FlowNode = ({ data }) => {
 };
 
 const toFlowElements = (nodes, edges, selectedNodeId) => ([
-  ...nodes.map(n => ({
-    id: n.id,
-    type: "flowNode",
-    position: { x: n.x || 120, y: n.y || 120 },
-    data: { title: n.label, value: n.value || "", type: n.type, selected: n.id === selectedNodeId }
-  })),
+  ...nodes.map(n => ({ id: n.id, type: "flowNode", position: { x: n.x || 120, y: n.y || 120 }, data: { title: n.label, value: n.value || "", type: n.type, selected: n.id === selectedNodeId } })),
   ...edges.map((e, idx) => ({ id: `e-${e.from}-${e.to}-${idx}`, source: e.from, target: e.to, animated: true, style: { stroke: "#64748b", strokeWidth: 2 }, markerEnd: { type: "arrowclosed", color: "#64748b" } }))
 ]);
 
 export default function FlowBuilder() {
   const classes = useStyles();
+  const [mode, setMode] = useState("list");
+  const [search, setSearch] = useState("");
+  const [editingFlowId, setEditingFlowId] = useState(null);
   const [flowName, setFlowName] = useState("Novo fluxo");
   const [keywords, setKeywords] = useState("");
   const [newType, setNewType] = useState("message");
   const [replyMessage, setReplyMessage] = useState("Olá! Como posso ajudar?");
   const [reviewOpen, setReviewOpen] = useState(false);
   const [savedFlows, setSavedFlows] = useState([]);
-
-  const [nodes, setNodes] = useState([
-    { id: "start", type: "start", label: "Início", value: "Mensagem recebida", x: 120, y: 180, config: {} },
-    { id: "n1", type: "message", label: "Exibir mensagem", value: "Olá! Como posso ajudar?", x: 380, y: 180, config: {} }
-  ]);
-  const [edges, setEdges] = useState([{ from: "start", to: "n1" }]);
+  const [nodes, setNodes] = useState(defaultNodes);
+  const [edges, setEdges] = useState(defaultEdges);
   const [selectedNodeId, setSelectedNodeId] = useState("n1");
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
@@ -79,7 +81,43 @@ export default function FlowBuilder() {
   const elements = useMemo(() => toFlowElements(nodes, edges, selectedNodeId), [nodes, edges, selectedNodeId]);
   const rfNodeTypes = useMemo(() => ({ flowNode: FlowNode }), []);
 
-  useEffect(() => { (async () => { try { const { data } = await api.get("/flows"); setSavedFlows(Array.isArray(data) ? data : []); } catch { toast.warning("Não foi possível carregar os fluxos salvos"); } })(); }, []);
+  const loadFlows = async () => {
+    try { const { data } = await api.get("/flows"); setSavedFlows(Array.isArray(data) ? data : []); }
+    catch { toast.warning("Não foi possível carregar os fluxos salvos"); }
+  };
+
+  useEffect(() => { loadFlows(); }, []);
+
+  const openEditorForFlow = flow => {
+    const payload = flow.visualPayload || {};
+    setEditingFlowId(flow.id || null);
+    setFlowName(flow.name || "Novo fluxo");
+    setKeywords(flow.containsText || payload?.metadata?.keywords || "");
+    setNodes(Array.isArray(payload.nodes) && payload.nodes.length ? payload.nodes : defaultNodes);
+    setEdges(Array.isArray(payload.edges) && payload.edges.length ? payload.edges : defaultEdges);
+    setSelectedNodeId((Array.isArray(payload.nodes) && payload.nodes[1]?.id) || "n1");
+    setMode("editor");
+  };
+
+  const createFlow = () => {
+    setEditingFlowId(null);
+    setFlowName("Novo fluxo");
+    setKeywords("");
+    setReplyMessage("Olá! Como posso ajudar?");
+    setNewType("message");
+    setNodes(defaultNodes);
+    setEdges(defaultEdges);
+    setSelectedNodeId("n1");
+    setMode("editor");
+  };
+
+  const deleteFlow = async flow => {
+    if (!window.confirm(`Excluir fluxo \"${flow.name}\"?`)) return;
+    try { await api.delete(`/flows/${flow.id}`); toast.success("Fluxo excluído"); loadFlows(); }
+    catch { toast.error("Falha ao excluir fluxo"); }
+  };
+
+  const filteredFlows = savedFlows.filter(f => `${f.id} ${f.name || ""}`.toLowerCase().includes(search.toLowerCase()));
 
   const addNode = () => {
     if (!flowName.trim() || !keywords.trim()) return toast.warning("Preencha nome e palavras-chave");
@@ -92,20 +130,67 @@ export default function FlowBuilder() {
 
   const updateNode = patch => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, ...patch } : n)));
   const updateNodeConfig = (key, value) => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, config: { ...(n.config || {}), [key]: value } } : n)));
-
   const onConnect = p => setEdges(prev => prev.find(e => e.from === p.source && e.to === p.target) ? prev : [...prev, { from: p.source, to: p.target }]);
   const onNodeDragStop = (_e, node) => setNodes(prev => prev.map(n => (n.id === node.id ? { ...n, x: node.position.x, y: node.position.y } : n)));
 
   const saveFlow = async () => {
     const visualPayload = { version: 4, metadata: { flowName, keywords }, nodes, edges, updatedAt: new Date().toISOString() };
-    try { await api.post("/flows", { name: flowName, triggerType: "message_received", containsText: keywords, actionType: newType, actionValue: replyMessage, isActive: true, visualPayload }); toast.success("Fluxo salvo no backend"); }
-    catch { localStorage.setItem("flowbuilder.visual.v4", JSON.stringify(visualPayload)); toast.warning("Salvo localmente para teste"); }
+    const payload = { name: flowName, triggerType: "message_received", containsText: keywords, actionType: newType, actionValue: replyMessage, isActive: true, visualPayload };
+    try {
+      if (editingFlowId) await api.put(`/flows/${editingFlowId}`, payload);
+      else await api.post("/flows", payload);
+      toast.success("Fluxo salvo no backend");
+      setMode("list");
+      await loadFlows();
+    } catch {
+      localStorage.setItem("flowbuilder.visual.v4", JSON.stringify(visualPayload));
+      toast.warning("Salvo localmente para teste");
+    }
   };
+
+  if (mode === "list") {
+    return (
+      <div className={classes.root}>
+        <Paper className={classes.panel} elevation={0}>
+          <Grid container spacing={1} alignItems="center">
+            <Grid item xs={12} md={5}><TextField fullWidth label="Buscar fluxo" variant="outlined" size="small" value={search} onChange={e => setSearch(e.target.value)} /></Grid>
+            <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={createFlow}>Adicionar projeto</Button></Grid>
+          </Grid>
+        </Paper>
+
+        <Paper className={classes.panel} elevation={0}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>ID</TableCell>
+                <TableCell>Nome</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredFlows.map(flow => (
+                <TableRow key={flow.id} hover className={classes.rowClickable} onClick={() => openEditorForFlow(flow)}>
+                  <TableCell>{flow.id}</TableCell>
+                  <TableCell>{flow.name || "(sem nome)"}</TableCell>
+                  <TableCell align="right" onClick={e => e.stopPropagation()}>
+                    <IconButton size="small" onClick={() => openEditorForFlow(flow)}><Edit fontSize="small" /></IconButton>
+                    <IconButton size="small" onClick={() => deleteFlow(flow)}><Delete fontSize="small" /></IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!filteredFlows.length && <TableRow><TableCell colSpan={3}>Nenhum fluxo encontrado.</TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </Paper>
+      </div>
+    );
+  }
 
   return (
     <div className={classes.root}>
       <Paper className={classes.panel} elevation={0}>
         <Grid container spacing={1} alignItems="center">
+          <Grid item><Button variant="outlined" startIcon={<ArrowBack />} onClick={() => setMode("list")}>Voltar</Button></Grid>
           <Grid item xs={12} md={3}><TextField fullWidth label="Nome do fluxo" variant="outlined" size="small" value={flowName} onChange={e => setFlowName(e.target.value)} /></Grid>
           <Grid item xs={12} md={4}><TextField fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
@@ -118,72 +203,12 @@ export default function FlowBuilder() {
 
       <Grid container spacing={2}>
         <Grid item xs={12} md={8}>
-          <div className={classes.flowShell}>
-            <div className={classes.topBar} />
-            <ReactFlow
-              elements={elements}
-              nodeTypes={rfNodeTypes}
-              onConnect={onConnect}
-              deleteKeyCode={46}
-              onNodeDragStop={onNodeDragStop}
-              onElementClick={(_e, el) => { if (!el.source && !el.target) setSelectedNodeId(el.id); }}
-              snapToGrid
-              snapGrid={[10, 10]}
-              connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}
-            >
-              <MiniMap />
-              <Controls />
-              <Background color="#dce1e9" gap={22} />
-            </ReactFlow>
-          </div>
+          <div className={classes.flowShell}><div className={classes.topBar} /><ReactFlow elements={elements} nodeTypes={rfNodeTypes} onConnect={onConnect} deleteKeyCode={46} onNodeDragStop={onNodeDragStop} onElementClick={(_e, el) => { if (!el.source && !el.target) setSelectedNodeId(el.id); }} snapToGrid snapGrid={[10, 10]} connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}><MiniMap /><Controls /><Background color="#dce1e9" gap={22} /></ReactFlow></div>
         </Grid>
-
         <Grid item xs={12} md={4}>
-          <div className={classes.editorPanel}>
-            <Typography className={classes.editorTitle}>Propriedades do Bloco</Typography>
-            {selectedNode ? (
-              <>
-                <TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} />
-                <div className={classes.editorSection}>
-                  <TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled />
-                </div>
-
-                {(selectedNode.type === "message" || selectedNode.type === "start") && (
-                  <div className={classes.editorSection}>
-                    <TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} />
-                  </div>
-                )}
-
-                {selectedNode.type === "webhook" && (
-                  <>
-                    <div className={classes.editorSection}><TextField fullWidth label="URL do Webhook" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.url) || ""} onChange={e => updateNodeConfig("url", e.target.value)} /></div>
-                    <div className={classes.editorSection}><TextField select fullWidth label="Método" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.method) || "POST"} onChange={e => updateNodeConfig("method", e.target.value)}><MenuItem value="POST">POST</MenuItem><MenuItem value="GET">GET</MenuItem><MenuItem value="PUT">PUT</MenuItem></TextField></div>
-                    <div className={classes.editorSection}><TextField fullWidth multiline minRows={4} label="Payload" variant="outlined" value={(selectedNode.config && selectedNode.config.payload) || "{}"} onChange={e => updateNodeConfig("payload", e.target.value)} /></div>
-                  </>
-                )}
-
-                {selectedNode.type === "kanban" && (
-                  <div className={classes.editorSection}><TextField fullWidth label="Coluna destino" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.column) || ""} onChange={e => updateNodeConfig("column", e.target.value)} /></div>
-                )}
-
-                {selectedNode.type === "condition" && (
-                  <>
-                    <div className={classes.editorSection}><TextField fullWidth label="Variável" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.varName) || ""} onChange={e => updateNodeConfig("varName", e.target.value)} /></div>
-                    <div className={classes.editorSection}><TextField select fullWidth label="Operador" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.operator) || "contains"} onChange={e => updateNodeConfig("operator", e.target.value)}><MenuItem value="contains">contains</MenuItem><MenuItem value="equals">equals</MenuItem><MenuItem value="startsWith">startsWith</MenuItem></TextField></div>
-                    <div className={classes.editorSection}><TextField fullWidth label="Valor" variant="outlined" size="small" value={(selectedNode.config && selectedNode.config.value) || ""} onChange={e => updateNodeConfig("value", e.target.value)} /></div>
-                  </>
-                )}
-
-                {selectedNode.type === "menu" && (
-                  <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Opções (uma por linha)" variant="outlined" value={(selectedNode.config && selectedNode.config.options) || "1 - Opção A\n2 - Opção B"} onChange={e => updateNodeConfig("options", e.target.value)} /></div>
-                )}
-              </>
-            ) : <Typography variant="body2">Selecione um bloco para editar.</Typography>}
-          </div>
+          <div className={classes.editorPanel}><Typography className={classes.editorTitle}>Propriedades do Bloco</Typography>{selectedNode ? <><TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} /><div className={classes.editorSection}><TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled /></div>{(selectedNode.type === "message" || selectedNode.type === "start") && <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} /></div>}</> : <Typography variant="body2">Selecione um bloco para editar.</Typography>}</div>
         </Grid>
       </Grid>
-
-      <Paper className={classes.panel} elevation={0}><Typography variant="subtitle2">Fluxos salvos: {savedFlows.length}</Typography></Paper>
     </div>
   );
 }
