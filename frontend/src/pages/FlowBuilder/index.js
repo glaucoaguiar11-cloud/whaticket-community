@@ -202,11 +202,8 @@ export default function FlowBuilder() {
       </Paper>
 
       <Grid container spacing={2}>
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12}>
           <div className={classes.flowShell}><div className={classes.topBar} /><ReactFlow elements={elements} nodeTypes={rfNodeTypes} onConnect={onConnect} deleteKeyCode={46} onNodeDragStop={onNodeDragStop} onElementClick={(_e, el) => { if (!el.source && !el.target) setSelectedNodeId(el.id); }} snapToGrid snapGrid={[10, 10]} connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}><MiniMap /><Controls /><Background color="#dce1e9" gap={22} /></ReactFlow></div>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <div className={classes.editorPanel}><Typography className={classes.editorTitle}>Propriedades do Bloco</Typography>{selectedNode ? <><TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} /><div className={classes.editorSection}><TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled /></div>{(selectedNode.type === "message" || selectedNode.type === "start") && <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} /></div>}</> : <Typography variant="body2">Selecione um bloco para editar.</Typography>}</div>
         </Grid>
       </Grid>
     </div>
