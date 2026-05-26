@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ReactFlow, { Background, Controls, MiniMap, Handle, Position } from "react-flow-renderer";
 import { Button, Grid, IconButton, MenuItem, Paper, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography, makeStyles } from "@material-ui/core";
-import { Add, ArrowBack, Delete, Edit, Save, Visibility } from "@material-ui/icons";
+import { Add, ArrowBack, Delete, Edit, Save, Visibility, RemoveCircleOutline } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 
@@ -75,6 +75,7 @@ export default function FlowBuilder() {
   const [nodes, setNodes] = useState(defaultNodes);
   const [edges, setEdges] = useState(defaultEdges);
   const [selectedNodeId, setSelectedNodeId] = useState("n1");
+  const [blockDrawerOpen, setBlockDrawerOpen] = useState(false);
 
   const byId = useMemo(() => Object.fromEntries(nodes.map(n => [n.id, n])), [nodes]);
   const selectedNode = byId[selectedNodeId];
@@ -130,6 +131,13 @@ export default function FlowBuilder() {
 
   const updateNode = patch => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, ...patch } : n)));
   const updateNodeConfig = (key, value) => setNodes(prev => prev.map(n => (n.id === selectedNodeId ? { ...n, config: { ...(n.config || {}), [key]: value } } : n)));
+  const removeSelectedNode = () => {
+    if (!selectedNodeId || selectedNodeId === "start") return;
+    setNodes(prev => prev.filter(n => n.id !== selectedNodeId));
+    setEdges(prev => prev.filter(e => e.from !== selectedNodeId && e.to !== selectedNodeId));
+    setSelectedNodeId("start");
+    setBlockDrawerOpen(false);
+  };
   const onConnect = p => setEdges(prev => prev.find(e => e.from === p.source && e.to === p.target) ? prev : [...prev, { from: p.source, to: p.target }]);
   const onNodeDragStop = (_e, node) => setNodes(prev => prev.map(n => (n.id === node.id ? { ...n, x: node.position.x, y: node.position.y } : n)));
 
@@ -195,6 +203,7 @@ export default function FlowBuilder() {
           <Grid item xs={12} md={4}><TextField fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
           <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
+          <Grid item><Button variant="outlined" onClick={() => setBlockDrawerOpen(v => !v)}>{blockDrawerOpen ? "Fechar edição" : "Editar bloco"}</Button></Grid>
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
           <Grid item><Button variant="contained" style={{ background: "#2e7d32", color: "#fff" }} startIcon={<Save />} onClick={saveFlow}>Salvar</Button></Grid>
         </Grid>
@@ -202,9 +211,14 @@ export default function FlowBuilder() {
       </Paper>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
-          <div className={classes.flowShell}><div className={classes.topBar} /><ReactFlow elements={elements} nodeTypes={rfNodeTypes} onConnect={onConnect} deleteKeyCode={46} onNodeDragStop={onNodeDragStop} onElementClick={(_e, el) => { if (!el.source && !el.target) setSelectedNodeId(el.id); }} snapToGrid snapGrid={[10, 10]} connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}><MiniMap /><Controls /><Background color="#dce1e9" gap={22} /></ReactFlow></div>
+        <Grid item xs={12} md={blockDrawerOpen ? 8 : 12}>
+          <div className={classes.flowShell}><div className={classes.topBar} /><ReactFlow elements={elements} nodeTypes={rfNodeTypes} onConnect={onConnect} deleteKeyCode={46} onNodeDragStop={onNodeDragStop} onElementClick={(_e, el) => { if (!el.source && !el.target) { setSelectedNodeId(el.id); setBlockDrawerOpen(true); } }} snapToGrid snapGrid={[10, 10]} connectionLineStyle={{ stroke: "#2e7d32", strokeWidth: 2 }}><MiniMap /><Controls /><Background color="#dce1e9" gap={22} /></ReactFlow></div>
         </Grid>
+        {blockDrawerOpen && (
+          <Grid item xs={12} md={4}>
+            <div className={classes.editorPanel}><Typography className={classes.editorTitle}>Editar bloco</Typography>{selectedNode ? <><TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} /><div className={classes.editorSection}><TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled /></div>{(selectedNode.type === "message" || selectedNode.type === "start") && <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} /></div>}<div className={classes.editorSection}><Button variant="outlined" color="secondary" startIcon={<RemoveCircleOutline />} onClick={removeSelectedNode} disabled={selectedNode.id === "start"}>Apagar bloco selecionado</Button></div></> : <Typography variant="body2">Selecione um bloco para editar.</Typography>}</div>
+          </Grid>
+        )}
       </Grid>
     </div>
   );
