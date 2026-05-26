@@ -7,14 +7,22 @@ import api from "../../services/api";
 
 const useStyles = makeStyles(theme => ({
   root: { display: "grid", gap: theme.spacing(1.5) },
-  panel: { padding: theme.spacing(1.5), borderRadius: 10, border: "1px solid #e4e7ec", background: "#fff" },
+  panel: { padding: theme.spacing(1.5), borderRadius: 10, border: "1px solid #e4e7ec", background: theme.palette.background.paper, color: theme.palette.text.primary },
   flowShell: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, overflow: "hidden" },
   topBar: { height: 8, background: "#2e7d32" },
-  review: { marginTop: theme.spacing(1), padding: theme.spacing(1), border: "1px dashed #c8ced9", borderRadius: 8, background: "#fbfcfe" },
-  editorPanel: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, background: "#fff", padding: 12, overflow: "auto" },
-  editorTitle: { fontWeight: 700, marginBottom: 10, color: "#334155" },
+  review: { marginTop: theme.spacing(1), padding: theme.spacing(1), border: "1px dashed #c8ced9", borderRadius: 8, background: theme.palette.type === "dark" ? "#0f172a" : "#fbfcfe", color: theme.palette.text.primary },
+  editorPanel: { height: 680, border: "1px solid #d7dbe5", borderRadius: 10, background: theme.palette.background.paper, color: theme.palette.text.primary, padding: 12, overflow: "auto" },
+  editorTitle: { fontWeight: 700, marginBottom: 10, color: theme.palette.text.primary },
   editorSection: { marginTop: 10 },
-  rowClickable: { cursor: "pointer" }
+  rowClickable: { cursor: "pointer" },
+  field: {
+    "& .MuiInputBase-root": { color: theme.palette.text.primary },
+    "& .MuiInputLabel-root": { color: theme.palette.text.secondary },
+    "& .MuiInputLabel-root.Mui-focused": { color: theme.palette.text.primary },
+    "& .MuiOutlinedInput-notchedOutline": { borderColor: theme.palette.type === "dark" ? "#475569" : undefined },
+    "& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline": { borderColor: theme.palette.type === "dark" ? "#64748b" : undefined },
+    "& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: theme.palette.type === "dark" ? "#94a3b8" : undefined }
+  }
 }));
 
 const nodeTypes = [
@@ -161,7 +169,7 @@ export default function FlowBuilder() {
       <div className={classes.root}>
         <Paper className={classes.panel} elevation={0}>
           <Grid container spacing={1} alignItems="center">
-            <Grid item xs={12} md={5}><TextField fullWidth label="Buscar fluxo" variant="outlined" size="small" value={search} onChange={e => setSearch(e.target.value)} /></Grid>
+            <Grid item xs={12} md={5}><TextField className={classes.field} fullWidth label="Buscar fluxo" variant="outlined" size="small" value={search} onChange={e => setSearch(e.target.value)} /></Grid>
             <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={createFlow}>Adicionar projeto</Button></Grid>
           </Grid>
         </Paper>
@@ -199,9 +207,9 @@ export default function FlowBuilder() {
       <Paper className={classes.panel} elevation={0}>
         <Grid container spacing={1} alignItems="center">
           <Grid item><Button variant="outlined" startIcon={<ArrowBack />} onClick={() => setMode("list")}>Voltar</Button></Grid>
-          <Grid item xs={12} md={3}><TextField fullWidth label="Nome do fluxo" variant="outlined" size="small" value={flowName} onChange={e => setFlowName(e.target.value)} /></Grid>
-          <Grid item xs={12} md={4}><TextField fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
-          <Grid item xs={12} md={3}><TextField select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
+          <Grid item xs={12} md={3}><TextField className={classes.field} fullWidth label="Nome do fluxo" variant="outlined" size="small" value={flowName} onChange={e => setFlowName(e.target.value)} /></Grid>
+          <Grid item xs={12} md={4}><TextField className={classes.field} fullWidth label="Palavras-chave" variant="outlined" size="small" value={keywords} onChange={e => setKeywords(e.target.value)} /></Grid>
+          <Grid item xs={12} md={3}><TextField className={classes.field} select fullWidth label="Ação" value={newType} onChange={e => setNewType(e.target.value)} variant="outlined" size="small">{nodeTypes.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}</TextField></Grid>
           <Grid item><Button variant="contained" color="primary" startIcon={<Add />} onClick={addNode}>Adicionar</Button></Grid>
           <Grid item><Button variant="outlined" onClick={() => setBlockDrawerOpen(v => !v)}>{blockDrawerOpen ? "Fechar edição" : "Editar bloco"}</Button></Grid>
           <Grid item><Button variant="outlined" startIcon={<Visibility />} onClick={() => setReviewOpen(v => !v)}>Revisão</Button></Grid>
@@ -216,7 +224,7 @@ export default function FlowBuilder() {
         </Grid>
         {blockDrawerOpen && (
           <Grid item xs={12} md={4}>
-            <div className={classes.editorPanel}><Typography className={classes.editorTitle}>Editar bloco</Typography>{selectedNode ? <><TextField fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} /><div className={classes.editorSection}><TextField fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled /></div>{(selectedNode.type === "message" || selectedNode.type === "start") && <div className={classes.editorSection}><TextField fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} /></div>}<div className={classes.editorSection}><Button variant="outlined" color="secondary" startIcon={<RemoveCircleOutline />} onClick={removeSelectedNode} disabled={selectedNode.id === "start"}>Apagar bloco selecionado</Button></div></> : <Typography variant="body2">Selecione um bloco para editar.</Typography>}</div>
+            <div className={classes.editorPanel}><Typography className={classes.editorTitle}>Editar bloco</Typography>{selectedNode ? <><TextField className={classes.field} fullWidth label="Título" variant="outlined" size="small" value={selectedNode.label || ""} onChange={e => updateNode({ label: e.target.value })} /><div className={classes.editorSection}><TextField className={classes.field} fullWidth label="Tipo" variant="outlined" size="small" value={selectedNode.type || ""} disabled /></div>{(selectedNode.type === "message" || selectedNode.type === "start") && <div className={classes.editorSection}><TextField className={classes.field} fullWidth multiline minRows={5} label="Mensagem" variant="outlined" value={selectedNode.value || ""} onChange={e => updateNode({ value: e.target.value })} /></div>}<div className={classes.editorSection}><Button variant="outlined" color="secondary" startIcon={<RemoveCircleOutline />} onClick={removeSelectedNode} disabled={selectedNode.id === "start"}>Apagar bloco selecionado</Button></div></> : <Typography variant="body2">Selecione um bloco para editar.</Typography>}</div>
           </Grid>
         )}
       </Grid>
